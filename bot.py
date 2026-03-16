@@ -107,10 +107,13 @@ async def on_member_join(member: discord.Member):
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if admin_channel:
             try:
-                await admin_channel.send(
-                    f"⚠️ **한달 이내 신규 계정 입장**\n"
-                    f"유저: {member.mention} | 계정 생성: {days}일 전"
+                embed = discord.Embed(
+                    title="🚨 한달 이내 신규 계정 입장",
+                    description=f"{member.mention} 님이 서버에 입장했습니다.\n계정 생성 **{days}일** 밖에 되지 않은 계정입니다.",
+                    color=discord.Color.red()
                 )
+                embed.set_footer(text=f"유저 ID: {member.id}")
+                await admin_channel.send(embed=embed)
             except discord.Forbidden:
                 pass
 
