@@ -122,7 +122,15 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
             log_embed.add_field(name="→", value="\u200b", inline=True)
             log_embed.add_field(name="변경 닉네임", value=self.new_nickname.value, inline=True)
             log_embed.set_footer(text=f"유저 ID: {user_id} | 7일 내 {weekly_count + 1}/{WEEKLY_LIMIT}회 사용")
-            await admin_channel.send(embed=log_embed)
+            log_content = (
+                f"🔄 **닉네임 자동 변경**\n"
+                f"유저: {interaction.user.mention}\n"
+                f"`{self.previous_nickname.value}` → `{self.new_nickname.value}`"
+            )
+            try:
+                await admin_channel.send(content=log_content, embed=log_embed)
+            except discord.Forbidden:
+                await admin_channel.send(content=log_content)
 
             await interaction.response.send_message(
                 f"✅ 닉네임이 **{self.new_nickname.value}** 으로 변경됐습니다!",
@@ -151,7 +159,16 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 new_nickname=self.new_nickname.value
             )
 
-            await admin_channel.send(embed=review_embed, view=view)
+            content = (
+                f"⚠️ **닉네임 변경 승인 필요**\n"
+                f"신청자: {interaction.user.mention}\n"
+                f"이전 닉네임: `{self.previous_nickname.value}` → 변경 닉네임: `{self.new_nickname.value}`\n"
+                f"7일 내 {weekly_count}회 변경 이력"
+            )
+            try:
+                await admin_channel.send(content=content, embed=review_embed, view=view)
+            except discord.Forbidden:
+                await admin_channel.send(content=content, view=view)
             await interaction.response.send_message(
                 "⚠️ 7일 내 변경 횟수를 초과하여 관리자 승인이 필요합니다.\n"
                 "승인 후 1~3시간 이내에 변경됩니다.",
