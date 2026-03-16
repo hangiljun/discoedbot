@@ -12,7 +12,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 HISTORY_FILE = "/data/nickname_history.json"
-WEEKLY_LIMIT = 2  # 7일 내 자동 변경 허용 횟수
+WEEKLY_LIMIT = 1  # 7일 내 자동 변경 허용 횟수 (1 = 첫번째만 자동, 2번째부터 관리자 승인)
 # ==========================
 
 intents = discord.Intents.default()
