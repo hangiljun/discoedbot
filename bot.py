@@ -173,6 +173,13 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         max_length=20
     )
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception):
+        print(f"[모달 에러] {type(error).__name__}: {error}")
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            await interaction.followup.send(f"❌ 오류 발생: {error}", ephemeral=True)
+
     async def on_submit(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
         weekly_count = get_weekly_count(user_id)
