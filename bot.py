@@ -66,10 +66,15 @@ async def on_member_join(member: discord.Member):
         try:
             await member.send(
                 f"안녕하세요 {member.mention}님!\n\n"
-                f"⚠️ 계정 생성일이 **{days}일** 밖에 되지 않아 "
-                f"현재 역할 부여가 제한됩니다.\n"
-                f"계정 생성 30일 이후에 다시 신청해 주세요."
+                f"⚠️ 디스코드 계정 생성일이 **{days}일** 밖에 되지 않아 "
+                f"서버 입장이 제한됩니다.\n"
+                f"계정 생성 **30일 이후**에 다시 입장해 주세요."
             )
+        except discord.Forbidden:
+            pass
+
+        try:
+            await member.kick(reason=f"디스코드 계정 생성 {days}일 미만 (30일 필요)")
         except discord.Forbidden:
             pass
 
