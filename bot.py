@@ -147,9 +147,10 @@ async def on_member_join(member: discord.Member):
         if admin_channel:
             try:
                 await admin_channel.send(
-                    f"🚨 **한달 이내 신규 계정 입장**\n"
-                    f"유저: {member.mention}\n"
-                    f"계정 생성 **{days}일** 밖에 되지 않은 계정입니다."
+                    f"```diff\n- 🚨 한달 이내 신규 계정 입장 🚨\n```"
+                    f"**유저:** {member.mention}\n"
+                    f"**계정 생성:** {days}일 밖에 되지 않은 계정입니다.\n"
+                    f"@here"
                 )
             except discord.Forbidden:
                 pass
