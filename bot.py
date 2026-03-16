@@ -136,7 +136,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 await admin_channel.send(content=log_content)
 
             await interaction.response.send_message(
-                f"✅ 닉네임이 **{self.new_nickname.value}** 으로 변경됐습니다!",
+                f"✅ **{self.previous_nickname.value}** 에서 **{self.new_nickname.value}** 으로 변경됐습니다!",
                 ephemeral=True
             )
 
@@ -214,7 +214,7 @@ class ApproveView(discord.ui.View):
         log_embed.set_footer(text=f"유저 ID: {self.user.id}")
 
         try:
-            await self.user.send(f"✅ 닉네임이 **{self.new_nickname}** 으로 변경됐습니다!")
+            await self.user.send(f"✅ **{self.previous_nickname}** 에서 **{self.new_nickname}** 으로 변경됐습니다!")
         except discord.Forbidden:
             pass
 
