@@ -104,16 +104,11 @@ async def on_member_join(member: discord.Member):
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if admin_channel:
             try:
-                embed = discord.Embed(
-                    title="🚨 한달 이내 신규 계정 입장",
-                    description=(
-                        f"{member.mention} 님이 서버에 입장했습니다.\n"
-                        f"계정 생성 **{days}일** 밖에 되지 않은 계정입니다."
-                    ),
-                    color=discord.Color.red()
+                await admin_channel.send(
+                    f"🚨 **한달 이내 신규 계정 입장**\n"
+                    f"유저: {member.mention}\n"
+                    f"계정 생성 **{days}일** 밖에 되지 않은 계정입니다."
                 )
-                embed.set_footer(text=f"유저 ID: {member.id}")
-                await admin_channel.send(embed=embed)
             except discord.Forbidden:
                 pass
 
@@ -151,13 +146,11 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
             record_change(user_id, previous_nickname, self.new_nickname.value)
 
             try:
-                log_embed = discord.Embed(
-                    title="🔄 닉네임 자동 변경",
-                    color=discord.Color.green()
+                await admin_channel.send(
+                    f"🔄 **닉네임 자동 변경**\n"
+                    f"유저: {interaction.user.mention}\n"
+                    f"`{previous_nickname}` → `{self.new_nickname.value}`"
                 )
-                log_embed.add_field(name="유저", value=interaction.user.mention, inline=False)
-                log_embed.add_field(name="변경 내용", value=f"`{previous_nickname}` → `{self.new_nickname.value}`", inline=False)
-                await admin_channel.send(embed=log_embed)
             except discord.Forbidden:
                 pass
 
@@ -174,16 +167,14 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
             view = ApproveView(request_id=request_id)
             bot.add_view(view)
 
-            review_embed = discord.Embed(
-                title="⚠️ 닉네임 변경 승인 필요",
-                color=discord.Color.orange()
-            )
-            review_embed.add_field(name="신청자", value=interaction.user.mention, inline=False)
-            review_embed.add_field(name="변경 내용", value=f"`{previous_nickname}` → `{self.new_nickname.value}`", inline=False)
-            review_embed.add_field(name="7일 내 변경 이력", value=f"{weekly_count}회", inline=False)
-
             try:
-                await admin_channel.send(embed=review_embed, view=view)
+                await admin_channel.send(
+                    f"⚠️ **닉네임 변경 승인 필요**\n"
+                    f"신청자: {interaction.user.mention}\n"
+                    f"`{previous_nickname}` → `{self.new_nickname.value}`\n"
+                    f"7일 내 {weekly_count}회 변경 이력",
+                    view=view
+                )
             except discord.Forbidden:
                 await interaction.response.send_message(
                     "❌ 관리자 채널 전송 실패. 관리자에게 문의하세요.", ephemeral=True
