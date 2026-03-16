@@ -240,6 +240,14 @@ class NicknameButtonView(discord.ui.View):
 @tree.command(name="닉네임패널", description="닉네임 변경 신청 버튼 생성 (관리자 전용)")
 @app_commands.checks.has_permissions(administrator=True)
 async def nickname_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    # 기존 패널 메시지 삭제
+    async for message in interaction.channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "📝 닉네임 변경 신청":
+                await message.delete()
+
     embed = discord.Embed(
         title="📝 닉네임 변경 신청",
         description=(
@@ -253,7 +261,7 @@ async def nickname_panel(interaction: discord.Interaction):
         color=discord.Color.blue()
     )
     await interaction.channel.send(embed=embed, view=NicknameButtonView())
-    await interaction.response.send_message("✅ 패널 생성 완료!", ephemeral=True)
+    await interaction.followup.send("✅ 패널 생성 완료!", ephemeral=True)
 
 
 @nickname_panel.error
