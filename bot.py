@@ -179,13 +179,13 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         previous_nickname = interaction.user.display_name
 
         server_input = self.server.value.strip()
-        combined_nickname = f"{server_input}/{level_input}/{self.new_nickname.value.strip()}"
+        level_input = self.level.value.strip()
 
         # 레벨 유효성 검사
-        level_input = self.level.value.strip()
         if not level_input.isdigit() or not (1 <= int(level_input) <= 300):
             await interaction.response.send_message(
-                "❌ 레벨은 1~300 사이의 숫자만 입력 가능합니다.", ephemeral=True
+                "❌ 레벨은 **숫자**만 입력 가능하며 **1~300** 사이여야 합니다.\n예) 285",
+                ephemeral=True
             )
             return
 
@@ -193,10 +193,12 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         if server_input not in SERVER_ROLES:
             server_list = ", ".join(SERVER_ROLES.keys())
             await interaction.response.send_message(
-                f"❌ 올바른 서버명을 입력해주세요.\n가능한 서버: {server_list}",
+                f"❌ 서버명을 정확히 입력해주세요.\n가능한 서버: **{server_list}**",
                 ephemeral=True
             )
             return
+
+        combined_nickname = f"{server_input}/{level_input}/{self.new_nickname.value.strip()}"
 
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if not admin_channel:
