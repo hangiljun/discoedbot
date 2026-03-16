@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 import os
 import json
+import uuid
 
 load_dotenv()
 
@@ -12,6 +13,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 HISTORY_FILE = "/data/nickname_history.json"
+PENDING_FILE = "/data/pending_approvals.json"
 WEEKLY_LIMIT = 1  # 7일 내 자동 변경 허용 횟수 (1 = 첫번째만 자동, 2번째부터 관리자 승인)
 # ==========================
 
@@ -24,26 +26,28 @@ tree = bot.tree
 
 
 # ========== 신청 기록 관리 ==========
+def ensure_data_dir():
+    os.makedirs("/data", exist_ok=True)
+
 def load_history() -> dict:
-    os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+    ensure_data_dir()
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def save_history(history: dict):
+    ensure_data_dir()
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 def get_weekly_count(user_id: str) -> int:
-    """7일 내 닉네임 변경 횟수 반환"""
     history = load_history()
     records = history.get(user_id, [])
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     return sum(1 for r in records if r["date"] >= cutoff)
 
 def record_change(user_id: str, previous: str, new: str):
-    """변경 기록 저장"""
     history = load_history()
     if user_id not in history:
         history[user_id] = []
@@ -54,6 +58,32 @@ def record_change(user_id: str, previous: str, new: str):
     })
     save_history(history)
 
+def load_pending() -> dict:
+    ensure_data_dir()
+    if os.path.exists(PENDING_FILE):
+        with open(PENDING_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_pending(pending: dict):
+    ensure_data_dir()
+    with open(PENDING_FILE, "w", encoding="utf-8") as f:
+        json.dump(pending, f, ensure_ascii=False, indent=2)
+
+def add_pending(request_id: str, user_id: int, previous: str, new: str):
+    pending = load_pending()
+    pending[request_id] = {
+        "user_id": user_id,
+        "previous": previous,
+        "new": new
+    }
+    save_pending(pending)
+
+def remove_pending(request_id: str):
+    pending = load_pending()
+    pending.pop(request_id, None)
+    save_pending(pending)
+
 
 # ========== 1. 신규 계정 입장 감지 ==========
 @bot.event
@@ -63,7 +93,6 @@ async def on_member_join(member: discord.Member):
     days = (now - created).days
 
     if days < 30:
-        # 유저에게 DM 발송
         try:
             await member.send(
                 f"안녕하세요 {member.mention}님!\n\n"
@@ -75,25 +104,15 @@ async def on_member_join(member: discord.Member):
         except discord.Forbidden:
             pass
 
-        # 관리자 채널에 알림 발송
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if admin_channel:
-            embed = discord.Embed(
-                title="⚠️ 신규 계정 입장 감지",
-                color=discord.Color.yellow(),
-                timestamp=datetime.now(timezone.utc)
-            )
-            embed.add_field(name="유저", value=member.mention, inline=True)
-            embed.add_field(name="계정 생성일", value=f"{created.strftime('%Y-%m-%d')}", inline=True)
-            embed.add_field(name="계정 나이", value=f"{days}일", inline=True)
-            embed.set_footer(text=f"유저 ID: {member.id}")
             try:
-                await admin_channel.send(embed=embed)
-            except discord.Forbidden:
                 await admin_channel.send(
-                    f"⚠️ **신규 계정 입장 감지**\n"
-                    f"유저: {member.mention} | 계정 생성: {days}일 | 생성일: {created.strftime('%Y-%m-%d')}"
+                    f"⚠️ **한달 이내 신규 계정 입장**\n"
+                    f"유저: {member.mention} | 계정 생성: {days}일 전"
                 )
+            except discord.Forbidden:
+                pass
 
 
 # ========== 2. 닉네임 변경 신청 모달 ==========
@@ -113,8 +132,6 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         user_id = str(interaction.user.id)
         weekly_count = get_weekly_count(user_id)
 
-        print(f"[닉네임신청] 유저: {interaction.user} | 7일내 횟수: {weekly_count} | 제한: {WEEKLY_LIMIT} | 파일존재: {os.path.exists(HISTORY_FILE)}")
-
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if not admin_channel:
             await interaction.response.send_message(
@@ -122,7 +139,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
             )
             return
 
-        # 7일 내 2번 미만 → 자동 변경
+        # 7일 내 1번 미만 → 자동 변경
         if weekly_count < WEEKLY_LIMIT:
             try:
                 await interaction.user.edit(nick=self.new_nickname.value)
@@ -134,28 +151,15 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
 
             record_change(user_id, self.previous_nickname.value, self.new_nickname.value)
 
-            # 관리자 채널에 자동 변경 기록
-            log_embed = discord.Embed(
-                title="🔄 닉네임 자동 변경",
-                color=discord.Color.blue(),
-                timestamp=datetime.now(timezone.utc)
-            )
-            log_embed.add_field(name="유저", value=interaction.user.mention, inline=True)
-            log_embed.add_field(name="\u200b", value="\u200b", inline=True)
-            log_embed.add_field(name="\u200b", value="\u200b", inline=True)
-            log_embed.add_field(name="이전 닉네임", value=self.previous_nickname.value, inline=True)
-            log_embed.add_field(name="→", value="\u200b", inline=True)
-            log_embed.add_field(name="변경 닉네임", value=self.new_nickname.value, inline=True)
-            log_embed.set_footer(text=f"유저 ID: {user_id} | 7일 내 {weekly_count + 1}/{WEEKLY_LIMIT}회 사용")
             log_content = (
                 f"🔄 **닉네임 자동 변경**\n"
                 f"유저: {interaction.user.mention}\n"
                 f"`{self.previous_nickname.value}` → `{self.new_nickname.value}`"
             )
             try:
-                await admin_channel.send(content=log_content, embed=log_embed)
-            except discord.Forbidden:
                 await admin_channel.send(content=log_content)
+            except discord.Forbidden:
+                pass
 
             await interaction.response.send_message(
                 f"✅ **{self.previous_nickname.value}** 에서 **{self.new_nickname.value}** 으로 변경됐습니다!",
@@ -164,25 +168,11 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
 
         # 7일 내 2번 이상 → 관리자 승인 필요
         else:
-            review_embed = discord.Embed(
-                title="⚠️ 닉네임 변경 승인 필요",
-                description=f"7일 내 {weekly_count}회 변경 이력으로 관리자 승인이 필요합니다.",
-                color=discord.Color.orange(),
-                timestamp=datetime.now(timezone.utc)
-            )
-            review_embed.add_field(name="신청자", value=interaction.user.mention, inline=True)
-            review_embed.add_field(name="\u200b", value="\u200b", inline=True)
-            review_embed.add_field(name="\u200b", value="\u200b", inline=True)
-            review_embed.add_field(name="이전 닉네임", value=self.previous_nickname.value, inline=True)
-            review_embed.add_field(name="→", value="\u200b", inline=True)
-            review_embed.add_field(name="변경 닉네임", value=self.new_nickname.value, inline=True)
-            review_embed.set_footer(text=f"유저 ID: {user_id} | 7일 내 {weekly_count}/{WEEKLY_LIMIT}회 사용")
+            request_id = str(uuid.uuid4())[:8]
+            add_pending(request_id, interaction.user.id, self.previous_nickname.value, self.new_nickname.value)
 
-            view = ApproveView(
-                user=interaction.user,
-                previous_nickname=self.previous_nickname.value,
-                new_nickname=self.new_nickname.value
-            )
+            view = ApproveView(request_id=request_id)
+            bot.add_view(view)
 
             content = (
                 f"⚠️ **닉네임 변경 승인 필요**\n"
@@ -190,10 +180,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 f"이전 닉네임: `{self.previous_nickname.value}` → 변경 닉네임: `{self.new_nickname.value}`\n"
                 f"7일 내 {weekly_count}회 변경 이력"
             )
-            try:
-                await admin_channel.send(content=content, embed=review_embed, view=view)
-            except discord.Forbidden:
-                await admin_channel.send(content=content, view=view)
+            await admin_channel.send(content=content, view=view)
             await interaction.response.send_message(
                 "⚠️ 7일 내 변경 횟수를 초과하여 관리자 승인이 필요합니다.\n"
                 "승인 후 1~3시간 이내에 변경됩니다.",
@@ -203,70 +190,80 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
 
 # ========== 3. 관리자 승인/거절 버튼 ==========
 class ApproveView(discord.ui.View):
-    def __init__(self, user: discord.Member, previous_nickname: str, new_nickname: str):
+    def __init__(self, request_id: str):
         super().__init__(timeout=None)
-        self.user = user
-        self.previous_nickname = previous_nickname
-        self.new_nickname = new_nickname
+        self.request_id = request_id
 
-    @discord.ui.button(label="✅ 승인", style=discord.ButtonStyle.success)
-    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            await self.user.edit(nick=self.new_nickname)
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "❌ 봇 권한 부족! (봇 역할이 대상 유저보다 높아야 합니다)", ephemeral=True
-            )
+        approve_btn = discord.ui.Button(
+            label="✅ 승인",
+            style=discord.ButtonStyle.success,
+            custom_id=f"approve_{request_id}"
+        )
+        reject_btn = discord.ui.Button(
+            label="❌ 거절",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"reject_{request_id}"
+        )
+        approve_btn.callback = self.approve
+        reject_btn.callback = self.reject
+        self.add_item(approve_btn)
+        self.add_item(reject_btn)
+
+    async def approve(self, interaction: discord.Interaction):
+        pending = load_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
             return
 
-        record_change(str(self.user.id), self.previous_nickname, self.new_nickname)
-
-        log_embed = discord.Embed(
-            title="✅ 닉네임 변경 승인 완료",
-            color=discord.Color.green(),
-            timestamp=datetime.now(timezone.utc)
-        )
-        log_embed.add_field(name="대상 유저", value=self.user.mention, inline=True)
-        log_embed.add_field(name="\u200b", value="\u200b", inline=True)
-        log_embed.add_field(name="\u200b", value="\u200b", inline=True)
-        log_embed.add_field(name="이전 닉네임", value=self.previous_nickname, inline=True)
-        log_embed.add_field(name="→", value="\u200b", inline=True)
-        log_embed.add_field(name="변경된 닉네임", value=self.new_nickname, inline=True)
-        log_embed.add_field(name="처리한 관리자", value=interaction.user.mention, inline=False)
-        log_embed.set_footer(text=f"유저 ID: {self.user.id}")
+        member = interaction.guild.get_member(data["user_id"])
+        if not member:
+            await interaction.response.send_message("❌ 유저를 찾을 수 없습니다.", ephemeral=True)
+            return
 
         try:
-            await self.user.send(f"✅ **{self.previous_nickname}** 에서 **{self.new_nickname}** 으로 변경됐습니다!")
+            await member.edit(nick=data["new"])
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 봇 권한 부족!", ephemeral=True)
+            return
+
+        record_change(str(data["user_id"]), data["previous"], data["new"])
+        remove_pending(self.request_id)
+
+        try:
+            await member.send(f"✅ **{data['previous']}** 에서 **{data['new']}** 으로 변경됐습니다!")
         except discord.Forbidden:
             pass
 
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
-        await interaction.response.send_message(embed=log_embed)
-
-    @discord.ui.button(label="❌ 거절", style=discord.ButtonStyle.danger)
-    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_embed = discord.Embed(
-            title="❌ 닉네임 변경 거절",
-            color=discord.Color.red(),
-            timestamp=datetime.now(timezone.utc)
+        await interaction.response.send_message(
+            f"✅ {member.mention} 닉네임 변경 완료!\n`{data['previous']}` → `{data['new']}`"
         )
-        log_embed.add_field(name="대상 유저", value=self.user.mention, inline=True)
-        log_embed.add_field(name="이전 닉네임", value=self.previous_nickname, inline=True)
-        log_embed.add_field(name="변경 요청 닉네임", value=self.new_nickname, inline=True)
-        log_embed.add_field(name="처리한 관리자", value=interaction.user.mention, inline=False)
-        log_embed.set_footer(text=f"유저 ID: {self.user.id}")
 
-        try:
-            await self.user.send("❌ 닉네임 변경 신청이 거절됐습니다. 관리자에게 문의해주세요.")
-        except discord.Forbidden:
-            pass
+    async def reject(self, interaction: discord.Interaction):
+        pending = load_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            return
+
+        member = interaction.guild.get_member(data["user_id"])
+        remove_pending(self.request_id)
+
+        if member:
+            try:
+                await member.send("❌ 닉네임 변경 신청이 거절됐습니다. 관리자에게 문의해주세요.")
+            except discord.Forbidden:
+                pass
 
         for child in self.children:
             child.disabled = True
         await interaction.message.edit(view=self)
-        await interaction.response.send_message(embed=log_embed)
+        await interaction.response.send_message(
+            f"❌ 닉네임 변경 신청 거절 완료"
+        )
 
 
 # ========== 4. 닉네임 변경 버튼 패널 ==========
@@ -284,7 +281,6 @@ class NicknameButtonView(discord.ui.View):
 async def nickname_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
-    # 기존 패널 메시지 삭제
     async for message in interaction.channel.history(limit=50):
         if message.author == bot.user and message.embeds:
             if message.embeds[0].title == "📝 닉네임 변경 신청":
@@ -318,7 +314,13 @@ async def nickname_panel_error(interaction: discord.Interaction, error):
 async def on_ready():
     await tree.sync()
     bot.add_view(NicknameButtonView())
-    print(f"✅ {bot.user} 온라인!")
+
+    # 봇 재시작 후 대기 중인 승인 요청 복원
+    pending = load_pending()
+    for request_id in pending:
+        bot.add_view(ApproveView(request_id=request_id))
+
+    print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건")
 
 
 bot.run(BOT_TOKEN)
