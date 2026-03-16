@@ -63,20 +63,37 @@ async def on_member_join(member: discord.Member):
     days = (now - created).days
 
     if days < 30:
+        # 유저에게 DM 발송
         try:
             await member.send(
                 f"안녕하세요 {member.mention}님!\n\n"
                 f"⚠️ 디스코드 계정 생성일이 **{days}일** 밖에 되지 않아 "
-                f"서버 입장이 제한됩니다.\n"
-                f"계정 생성 **30일 이후**에 다시 입장해 주세요."
+                f"역할 부여가 제한됩니다.\n"
+                f"디스코드 가입 후 **30일이 지나면** 다시 핸즈인증 신청해 주세요.\n\n"
+                f"메이플랜드는 한달 이내도 이용 가능합니다."
             )
         except discord.Forbidden:
             pass
 
-        try:
-            await member.kick(reason=f"디스코드 계정 생성 {days}일 미만 (30일 필요)")
-        except discord.Forbidden:
-            pass
+        # 관리자 채널에 알림 발송
+        admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+        if admin_channel:
+            embed = discord.Embed(
+                title="⚠️ 신규 계정 입장 감지",
+                color=discord.Color.yellow(),
+                timestamp=datetime.now(timezone.utc)
+            )
+            embed.add_field(name="유저", value=member.mention, inline=True)
+            embed.add_field(name="계정 생성일", value=f"{created.strftime('%Y-%m-%d')}", inline=True)
+            embed.add_field(name="계정 나이", value=f"{days}일", inline=True)
+            embed.set_footer(text=f"유저 ID: {member.id}")
+            try:
+                await admin_channel.send(embed=embed)
+            except discord.Forbidden:
+                await admin_channel.send(
+                    f"⚠️ **신규 계정 입장 감지**\n"
+                    f"유저: {member.mention} | 계정 생성: {days}일 | 생성일: {created.strftime('%Y-%m-%d')}"
+                )
 
 
 # ========== 2. 닉네임 변경 신청 모달 ==========
