@@ -117,11 +117,6 @@ async def on_member_join(member: discord.Member):
 
 # ========== 2. 닉네임 변경 신청 모달 ==========
 class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
-    previous_nickname = discord.ui.TextInput(
-        label="이전 닉네임",
-        placeholder="현재 사용 중인 게임 내 캐릭터 닉네임",
-        max_length=32
-    )
     new_nickname = discord.ui.TextInput(
         label="변경할 닉네임",
         placeholder="새로 사용할 게임 내 캐릭터 닉네임",
@@ -131,6 +126,8 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
     async def on_submit(self, interaction: discord.Interaction):
         user_id = str(interaction.user.id)
         weekly_count = get_weekly_count(user_id)
+        # 이전 닉네임은 현재 서버 닉네임(없으면 디스코드 이름)으로 자동 설정
+        previous_nickname = interaction.user.display_name
 
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if not admin_channel:
@@ -149,12 +146,12 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 )
                 return
 
-            record_change(user_id, self.previous_nickname.value, self.new_nickname.value)
+            record_change(user_id, previous_nickname, self.new_nickname.value)
 
             log_content = (
                 f"🔄 **닉네임 자동 변경**\n"
                 f"유저: {interaction.user.mention}\n"
-                f"`{self.previous_nickname.value}` → `{self.new_nickname.value}`"
+                f"`{previous_nickname}` → `{self.new_nickname.value}`"
             )
             try:
                 await admin_channel.send(content=log_content)
@@ -162,14 +159,14 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 pass
 
             await interaction.response.send_message(
-                f"✅ **{self.previous_nickname.value}** 에서 **{self.new_nickname.value}** 으로 변경됐습니다!",
+                f"✅ **{previous_nickname}** 에서 **{self.new_nickname.value}** 으로 변경됐습니다!",
                 ephemeral=True
             )
 
         # 7일 내 2번 이상 → 관리자 승인 필요
         else:
             request_id = str(uuid.uuid4())[:8]
-            add_pending(request_id, interaction.user.id, self.previous_nickname.value, self.new_nickname.value)
+            add_pending(request_id, interaction.user.id, previous_nickname, self.new_nickname.value)
 
             view = ApproveView(request_id=request_id)
             bot.add_view(view)
@@ -177,7 +174,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
             content = (
                 f"⚠️ **닉네임 변경 승인 필요**\n"
                 f"신청자: {interaction.user.mention}\n"
-                f"이전 닉네임: `{self.previous_nickname.value}` → 변경 닉네임: `{self.new_nickname.value}`\n"
+                f"이전 닉네임: `{previous_nickname}` → 변경 닉네임: `{self.new_nickname.value}`\n"
                 f"7일 내 {weekly_count}회 변경 이력"
             )
             await admin_channel.send(content=content, view=view)
