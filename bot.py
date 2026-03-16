@@ -91,6 +91,8 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         user_id = str(interaction.user.id)
         weekly_count = get_weekly_count(user_id)
 
+        print(f"[닉네임신청] 유저: {interaction.user} | 7일내 횟수: {weekly_count} | 제한: {WEEKLY_LIMIT} | 파일존재: {os.path.exists(HISTORY_FILE)}")
+
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if not admin_channel:
             await interaction.response.send_message(
