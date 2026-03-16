@@ -11,7 +11,7 @@ load_dotenv()
 # ========== 설정 ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
-HISTORY_FILE = "nickname_history.json"
+HISTORY_FILE = "/data/nickname_history.json"
 WEEKLY_LIMIT = 2  # 7일 내 자동 변경 허용 횟수
 # ==========================
 
@@ -25,6 +25,7 @@ tree = bot.tree
 
 # ========== 신청 기록 관리 ==========
 def load_history() -> dict:
+    os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
