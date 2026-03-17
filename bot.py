@@ -221,6 +221,22 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
+        # 디스코드 가입일 30일 미만 체크
+        days = (datetime.now(timezone.utc) - interaction.user.created_at).days
+        if days < 30:
+            try:
+                await interaction.user.send(
+                    f"디스코드 가입일이 30일 미만 계정은 역할 부여가 제한 됩니다.\n"
+                    f"다른 디스코드 아이디로 재 신청 또는 30일 뒤에 재 신청 부탁 드립니다."
+                )
+            except discord.Forbidden:
+                pass
+            await interaction.response.send_message(
+                "❌ 디스코드 가입일이 30일 미만인 계정은 인증 신청이 제한됩니다.",
+                ephemeral=True
+            )
+            return
+
         data = auth_flow_data.get(interaction.user.id, {})
         server = data.get("server")
         method = data.get("method")
