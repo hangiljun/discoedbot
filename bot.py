@@ -12,6 +12,7 @@ load_dotenv()
 # ========== 설정 ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
+AUTH_ADMIN_CHANNEL_ID = int(os.getenv("AUTH_ADMIN_CHANNEL_ID", "1483398777904828416"))
 HISTORY_FILE = "/data/nickname_history.json"
 PENDING_FILE = "/data/pending_approvals.json"
 WEEKLY_LIMIT = 1
@@ -252,7 +253,7 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
         nickname_val = self.nickname.value.strip()
         combined_nick = f"{server}/{level_val}/{nickname_val}"
 
-        admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if not admin_channel:
             await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
             return
@@ -470,7 +471,7 @@ async def on_member_join(member: discord.Member):
         except discord.Forbidden:
             pass
 
-        admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if admin_channel:
             try:
                 await admin_channel.send(
