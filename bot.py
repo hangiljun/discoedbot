@@ -471,6 +471,29 @@ async def on_member_join(member: discord.Member):
                 pass
 
 
+# ========== 닉네임 패널 자동 재생성 ==========
+async def refresh_nickname_panel(channel: discord.TextChannel):
+    async for message in channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "📝 닉네임 변경 신청":
+                await message.delete()
+                break
+    embed = discord.Embed(
+        title="📝 닉네임 변경 신청",
+        description=(
+            "아래 버튼을 눌러 닉네임 변경을 신청하세요.\n\n"
+            "**절차:**\n"
+            "1️⃣ 버튼 클릭\n"
+            "2️⃣ 서버 선택\n"
+            "3️⃣ 레벨 / 닉네임 입력\n"
+            "4️⃣ 관리자 확인 후 변경 완료\n\n"
+            "⏱️ 승인 후 **1~3시간 이내**에 변경됩니다."
+        ),
+        color=discord.Color.blue()
+    )
+    await channel.send(embed=embed, view=NicknameButtonView())
+
+
 # ========== 2. 닉네임 변경 - 서버 선택 드롭다운 ==========
 class NickServerSelectView(discord.ui.View):
     def __init__(self):
@@ -565,6 +588,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 f"✅ **{previous_nickname}** 에서 **{combined_nickname}** 으로 변경됐습니다!",
                 ephemeral=True
             )
+            await refresh_nickname_panel(interaction.channel)
 
         # 7일 내 2번 이상 → 관리자 승인 필요
         else:
@@ -594,6 +618,7 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
                 "승인 후 1~3시간 이내에 변경됩니다.",
                 ephemeral=True
             )
+            await refresh_nickname_panel(interaction.channel)
 
 
 # ========== 3. 관리자 승인/거절 버튼 ==========
