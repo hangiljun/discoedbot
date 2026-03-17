@@ -275,7 +275,7 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
         auth_flow_data.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
-            "✅ 핸즈 인증 신청이 완료됐어요!\n관리자 확인 후 1~3시간 이내에 처리됩니다.",
+            "✅ 핸즈 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
             ephemeral=True
         )
 
@@ -407,10 +407,10 @@ async def auth_panel(interaction: discord.Interaction):
         description=(
             "**절차:**\n"
             "1️⃣ 카카오톡 또는 우측상단 관리자에게\n"
-            "2️⃣ 핸즈사진 + 게임 내 사진, 디스코드 닉네임 전달\n"
+            "2️⃣ 핸즈사진 + 게임 내 사진, 디스코드 닉네임 전달 후\n"
             "3️⃣ 아래 버튼 클릭\n"
             "4️⃣ 서버 선택\n"
-            "5️⃣ 사진 전송 위치 선택 (카톡 / DM)\n"
+            "5️⃣ 인증 사진 보낸 위치 선택 (카톡 / DM)\n"
             "6️⃣ 메이플 레벨 및 닉네임 입력\n"
             "7️⃣ 관리자 확인 후 역할 부여\n\n"
             "⏱️ 신청 후 **2시간 이내**에 처리됩니다."
