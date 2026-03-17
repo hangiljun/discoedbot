@@ -45,6 +45,7 @@ AUTH_SERVER_LIST = [
 ]
 
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
+nick_flow_data = {}  # user_id -> {"server": str}
 
 intents = discord.Intents.default()
 intents.members = True
@@ -470,17 +471,27 @@ async def on_member_join(member: discord.Member):
                 pass
 
 
+# ========== 2. 닉네임 변경 - 서버 선택 드롭다운 ==========
+class NickServerSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.select(
+        placeholder="메이플 서버를 선택하세요",
+        custom_id="nick_server_select",
+        options=[discord.SelectOption(label=s, value=s) for s in AUTH_SERVER_LIST]
+    )
+    async def server_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        nick_flow_data[interaction.user.id] = {"server": select.values[0]}
+        await interaction.response.send_modal(NicknameModal())
+
+
 # ========== 2. 닉네임 변경 신청 모달 ==========
 class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
-    server = discord.ui.TextInput(
-        label="서버",
-        placeholder="예) 크로아, 베라, 스카니아, 루나, 오로라 등",
-        max_length=20
-    )
     level = discord.ui.TextInput(
         label="레벨",
-        placeholder="예) 285",
-        max_length=10
+        placeholder="숫자만 입력 (1~300)",
+        max_length=3
     )
     new_nickname = discord.ui.TextInput(
         label="닉네임",
@@ -500,27 +511,25 @@ class NicknameModal(discord.ui.Modal, title="닉네임 변경 신청"):
         weekly_count = get_weekly_count(user_id)
         previous_nickname = interaction.user.display_name
 
-        server_input = self.server.value.strip()
+        data = nick_flow_data.get(interaction.user.id, {})
+        server_input = data.get("server")
+
+        if not server_input:
+            await interaction.response.send_message("❌ 처음부터 다시 신청해주세요.", ephemeral=True)
+            return
+
         level_input = self.level.value.strip()
 
         # 레벨 유효성 검사
         if not level_input.isdigit() or not (1 <= int(level_input) <= 300):
             await interaction.response.send_message(
-                "❌ 레벨은 **숫자**만 입력 가능하며 **1~300** 사이여야 합니다.\n예) 285",
-                ephemeral=True
-            )
-            return
-
-        # 서버 유효성 검사
-        if server_input not in SERVER_ROLES:
-            server_list = ", ".join(SERVER_ROLES.keys())
-            await interaction.response.send_message(
-                f"❌ 서버명을 정확히 입력해주세요.\n가능한 서버: **{server_list}**",
+                "❌ 레벨이 잘못 적혀있습니다. 1~300 사이의 숫자만 입력해주세요.",
                 ephemeral=True
             )
             return
 
         combined_nickname = f"{server_input}/{level_input}/{self.new_nickname.value.strip()}"
+        nick_flow_data.pop(interaction.user.id, None)
 
         admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
         if not admin_channel:
@@ -673,7 +682,12 @@ class NicknameButtonView(discord.ui.View):
 
     @discord.ui.button(label="📝 닉네임 변경 신청", style=discord.ButtonStyle.primary, custom_id="nickname_request")
     async def request_nickname(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(NicknameModal())
+        view = NickServerSelectView()
+        await interaction.response.send_message(
+            "📋 메이플 서버를 선택해주세요:",
+            view=view,
+            ephemeral=True
+        )
 
 
 @bot.tree.command(name="닉네임패널", description="닉네임 변경 신청 버튼 생성 (관리자 전용)")
