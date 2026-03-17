@@ -488,7 +488,7 @@ async def refresh_nickname_panel(channel: discord.TextChannel):
             "2️⃣ 서버 선택\n"
             "3️⃣ 레벨 / 닉네임 입력\n"
             "4️⃣ 관리자 확인 후 변경 완료\n\n"
-            "⏱️ 승인 후 **1~3시간 이내**에 변경됩니다."
+            "⏱️ 신청 후 **1시간 이내**에 변경됩니다."
         ),
         color=discord.Color.blue()
     )
