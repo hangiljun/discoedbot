@@ -15,6 +15,8 @@ ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 HISTORY_FILE = "/data/nickname_history.json"
 PENDING_FILE = "/data/pending_approvals.json"
 WEEKLY_LIMIT = 1
+AUTH_PENDING_FILE = "/data/auth_pending.json"
+HANDS_AUTH_ROLE = "「핸즈 & 인증유저」"
 # ==========================
 
 # 서버명 → 역할명 매핑
@@ -31,7 +33,18 @@ SERVER_ROLES = {
     "제니스": "제니스",
     "엘리시움": "엘리시움",
     "유니온": "유니온",
+    "아케인": "아케인",
+    "노바": "노바",
+    "헬리오스": "에오스/헬리오스",
 }
+
+AUTH_SERVER_LIST = [
+    "스카니아", "베라", "루나", "엘리시움", "크로아",
+    "유니온", "이노시스", "레드", "오로라", "아케인",
+    "노바", "에오스", "헬리오스"
+]
+
+auth_flow_data = {}  # user_id -> {"server": str, "method": str}
 
 intents = discord.Intents.default()
 intents.members = True
@@ -123,6 +136,296 @@ async def update_server_role(member: discord.Member, new_server: str):
             except discord.Forbidden:
                 return False
     return False
+
+
+# ========== 인증 신청 기록 관리 ==========
+def load_auth_pending() -> dict:
+    ensure_data_dir()
+    if os.path.exists(AUTH_PENDING_FILE):
+        with open(AUTH_PENDING_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_auth_pending(pending: dict):
+    ensure_data_dir()
+    with open(AUTH_PENDING_FILE, "w", encoding="utf-8") as f:
+        json.dump(pending, f, ensure_ascii=False, indent=2)
+
+def add_auth_pending(request_id: str, user_id: int, server: str, level: str, nickname: str, method: str):
+    pending = load_auth_pending()
+    pending[request_id] = {
+        "user_id": user_id,
+        "server": server,
+        "level": level,
+        "nickname": nickname,
+        "method": method
+    }
+    save_auth_pending(pending)
+
+def remove_auth_pending(request_id: str):
+    pending = load_auth_pending()
+    pending.pop(request_id, None)
+    save_auth_pending(pending)
+
+
+# ========== 핸즈 인증 - 서버 선택 드롭다운 ==========
+class AuthServerSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.select(
+        placeholder="메이플 서버를 선택하세요",
+        custom_id="auth_server_select",
+        options=[discord.SelectOption(label=s, value=s) for s in AUTH_SERVER_LIST]
+    )
+    async def server_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        auth_flow_data[interaction.user.id] = {"server": select.values[0]}
+        view = AuthPhotoMethodView()
+        await interaction.response.edit_message(
+            content=f"✅ 서버: **{select.values[0]}**\n\n📸 핸즈 인증 사진을 어디로 보내셨나요?",
+            view=view
+        )
+
+
+# ========== 핸즈 인증 - DM/카톡 선택 ==========
+class AuthPhotoMethodView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.button(label="💬 DM", style=discord.ButtonStyle.primary, custom_id="auth_method_dm")
+    async def dm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = auth_flow_data.get(interaction.user.id, {})
+        data["method"] = "DM"
+        auth_flow_data[interaction.user.id] = data
+        await interaction.response.send_modal(AuthModal())
+
+    @discord.ui.button(label="🟡 카카오톡", style=discord.ButtonStyle.secondary, custom_id="auth_method_kakao")
+    async def kakao_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = auth_flow_data.get(interaction.user.id, {})
+        data["method"] = "카카오톡"
+        auth_flow_data[interaction.user.id] = data
+        await interaction.response.send_modal(AuthModal())
+
+
+# ========== 핸즈 인증 모달 (레벨 + 닉네임) ==========
+class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
+    level = discord.ui.TextInput(
+        label="레벨",
+        placeholder="숫자만 입력 (1~300)",
+        max_length=3
+    )
+    nickname = discord.ui.TextInput(
+        label="닉네임",
+        placeholder="게임 내 캐릭터 닉네임",
+        max_length=20
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = auth_flow_data.get(interaction.user.id, {})
+        server = data.get("server")
+        method = data.get("method")
+
+        if not server or not method:
+            await interaction.response.send_message("❌ 처음부터 다시 신청해주세요.", ephemeral=True)
+            return
+
+        level_val = self.level.value.strip()
+        if not level_val.isdigit() or not (1 <= int(level_val) <= 300):
+            await interaction.response.send_message(
+                "❌ 레벨이 잘못 적혀있습니다. 1~300 사이의 숫자만 입력해주세요.",
+                ephemeral=True
+            )
+            return
+
+        nickname_val = self.nickname.value.strip()
+        combined_nick = f"{server}/{level_val}/{nickname_val}"
+
+        admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
+        if not admin_channel:
+            await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        request_id = str(uuid.uuid4())[:8]
+        add_auth_pending(request_id, interaction.user.id, server, level_val, nickname_val, method)
+
+        view = AuthApproveView(request_id=request_id)
+        bot.add_view(view)
+
+        await admin_channel.send(
+            f"🔐 **핸즈 인증 신청**\n"
+            f"신청자: {interaction.user.mention}\n"
+            f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
+            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`\n"
+            f"사진 전송 방법: **{method}**",
+            view=view
+        )
+
+        auth_flow_data.pop(interaction.user.id, None)
+
+        await interaction.response.send_message(
+            "✅ 핸즈 인증 신청이 완료됐어요!\n관리자 확인 후 1~3시간 이내에 처리됩니다.",
+            ephemeral=True
+        )
+
+
+# ========== 핸즈 인증 관리자 승인/거절 ==========
+class AuthApproveView(discord.ui.View):
+    def __init__(self, request_id: str):
+        super().__init__(timeout=None)
+        self.request_id = request_id
+
+        approve_btn = discord.ui.Button(
+            label="✅ 승인",
+            style=discord.ButtonStyle.success,
+            custom_id=f"auth_approve_{request_id}"
+        )
+        reject_btn = discord.ui.Button(
+            label="❌ 거절",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"auth_reject_{request_id}"
+        )
+        approve_btn.callback = self.approve
+        reject_btn.callback = self.reject
+        self.add_item(approve_btn)
+        self.add_item(reject_btn)
+
+    async def approve(self, interaction: discord.Interaction):
+        pending = load_auth_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            return
+
+        member = interaction.guild.get_member(data["user_id"])
+        if not member:
+            await interaction.response.send_message("❌ 유저를 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        combined_nick = f"{data['server']}/{data['level']}/{data['nickname']}"
+
+        try:
+            await member.edit(nick=combined_nick)
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 닉네임 변경 권한 부족!", ephemeral=True)
+            return
+
+        # 서버 역할 부여
+        await update_server_role(member, data["server"])
+
+        # 핸즈 & 인증유저 역할 부여
+        auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
+        if auth_role:
+            try:
+                await member.add_roles(auth_role)
+            except discord.Forbidden:
+                pass
+
+        remove_auth_pending(self.request_id)
+
+        # 유저에게 DM 전송
+        try:
+            await member.send(
+                "**[핸즈인증 완료]**\n\n"
+                "★ 거래 전 주의 사항 참고 하세요★\n"
+                "https://www.maplediscord.com/tip\n\n"
+                "★친구초대★\n"
+                "친구에게 디스코드 채널 소개 해주세요\n"
+                "디스코드 초대링크 : https://discord.gg/2UwBw8dnSv\n"
+                "좋은 하루 보내세요!"
+            )
+        except discord.Forbidden:
+            pass
+
+        for child in self.children:
+            child.disabled = True
+        await interaction.message.edit(view=self)
+        await interaction.response.send_message(
+            f"✅ {member.mention} 핸즈 인증 완료!\n닉네임: `{combined_nick}` | 역할 부여 완료"
+        )
+
+    async def reject(self, interaction: discord.Interaction):
+        pending = load_auth_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            return
+
+        member = interaction.guild.get_member(data["user_id"])
+        remove_auth_pending(self.request_id)
+
+        if member:
+            try:
+                await member.send("❌ 핸즈 인증 신청이 거절됐습니다. 관리자에게 문의해주세요.")
+            except discord.Forbidden:
+                pass
+
+        for child in self.children:
+            child.disabled = True
+        await interaction.message.edit(view=self)
+        await interaction.response.send_message("❌ 핸즈 인증 신청 거절 완료")
+
+
+# ========== 핸즈 인증 버튼 패널 ==========
+class AuthButtonView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔐 핸즈 인증 신청", style=discord.ButtonStyle.success, custom_id="auth_request")
+    async def auth_request(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = AuthServerSelectView()
+        await interaction.response.send_message(
+            "📋 메이플 서버를 선택해주세요:",
+            view=view,
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="인증패널", description="핸즈 인증 신청 버튼 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def auth_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    async for message in interaction.channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🍁 핸즈 인증 신청":
+                await message.delete()
+
+    embed = discord.Embed(
+        title="🍁 핸즈 인증 신청",
+        description=(
+            "아래 버튼을 눌러 핸즈 인증을 신청하세요.\n\n"
+            "**절차:**\n"
+            "1️⃣ 버튼 클릭\n"
+            "2️⃣ 서버 선택\n"
+            "3️⃣ 사진 전송 방법 선택 (DM / 카톡)\n"
+            "4️⃣ 레벨 및 닉네임 입력\n"
+            "5️⃣ 관리자 확인 후 역할 부여\n\n"
+            "⏱️ 승인 후 **1~3시간 이내**에 처리됩니다."
+        ),
+        color=discord.Color.green()
+    )
+    await interaction.channel.send(embed=embed, view=AuthButtonView())
+    await interaction.followup.send("✅ 인증 패널 생성 완료!", ephemeral=True)
+
+
+@auth_panel.error
+async def auth_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+
+
+# ========== 봇 DM 자동 응답 ==========
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return
+    if isinstance(message.channel, discord.DMChannel):
+        await message.channel.send(
+            "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
+        )
+    await bot.process_commands(message)
 
 
 # ========== 1. 신규 계정 입장 감지 ==========
@@ -400,12 +703,17 @@ async def nickname_panel_error(interaction: discord.Interaction, error):
 async def on_ready():
     await bot.tree.sync()
     bot.add_view(NicknameButtonView())
+    bot.add_view(AuthButtonView())
 
     pending = load_pending()
     for request_id in pending:
         bot.add_view(ApproveView(request_id=request_id))
 
-    print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건")
+    auth_pending = load_auth_pending()
+    for request_id in auth_pending:
+        bot.add_view(AuthApproveView(request_id=request_id))
+
+    print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건")
 
 
 bot.run(BOT_TOKEN)
