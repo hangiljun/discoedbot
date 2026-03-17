@@ -351,8 +351,12 @@ class AuthApproveView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await interaction.message.edit(view=self)
-        await interaction.response.send_message(
+        await interaction.channel.send(
             f"✅ {member.mention} 핸즈 인증 완료!\n닉네임: `{combined_nick}` | 역할 부여 완료"
         )
 
@@ -360,7 +364,10 @@ class AuthApproveView(discord.ui.View):
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
-            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            try:
+                await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            except Exception:
+                await interaction.channel.send("❌ 이미 처리된 신청입니다.")
             return
 
         member = interaction.guild.get_member(data["user_id"])
@@ -385,8 +392,12 @@ class AuthApproveView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await interaction.message.edit(view=self)
-        await interaction.response.send_message("❌ 핸즈 인증 신청 거절 완료")
+        await interaction.channel.send("❌ 핸즈 인증 신청 거절 완료")
 
 
 # ========== 핸즈 인증 버튼 패널 ==========
@@ -686,8 +697,12 @@ class ApproveView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await interaction.message.edit(view=self)
-        await interaction.response.send_message(
+        await interaction.channel.send(
             f"✅ {member.mention} 닉네임 변경 완료!\n`{data['previous']}` → `{data['new']}`"
         )
 
@@ -695,7 +710,10 @@ class ApproveView(discord.ui.View):
         pending = load_pending()
         data = pending.get(self.request_id)
         if not data:
-            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            try:
+                await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            except Exception:
+                await interaction.channel.send("❌ 이미 처리된 신청입니다.")
             return
 
         member = interaction.guild.get_member(data["user_id"])
@@ -709,8 +727,12 @@ class ApproveView(discord.ui.View):
 
         for child in self.children:
             child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
         await interaction.message.edit(view=self)
-        await interaction.response.send_message("❌ 닉네임 변경 신청 거절 완료")
+        await interaction.channel.send("❌ 닉네임 변경 신청 거절 완료")
 
 
 # ========== 4. 닉네임 변경 버튼 패널 ==========
