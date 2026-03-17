@@ -702,6 +702,8 @@ async def nickname_panel_error(interaction: discord.Interaction, error):
 @bot.event
 async def on_ready():
     await bot.tree.sync()
+    for guild in bot.guilds:
+        await bot.tree.sync(guild=guild)
     bot.add_view(NicknameButtonView())
     bot.add_view(AuthButtonView())
 
