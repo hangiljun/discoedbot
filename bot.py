@@ -306,12 +306,12 @@ class AuthApproveView(discord.ui.View):
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
-            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            await interaction.channel.send("❌ 이미 처리된 신청입니다.")
             return
 
         member = interaction.guild.get_member(data["user_id"])
         if not member:
-            await interaction.response.send_message("❌ 유저를 찾을 수 없습니다.", ephemeral=True)
+            await interaction.channel.send("❌ 유저를 찾을 수 없습니다.")
             return
 
         combined_nick = f"{data['server']}/{data['level']}/{data['nickname']}"
@@ -319,7 +319,7 @@ class AuthApproveView(discord.ui.View):
         try:
             await member.edit(nick=combined_nick)
         except discord.Forbidden:
-            await interaction.response.send_message("❌ 닉네임 변경 권한 부족!", ephemeral=True)
+            await interaction.channel.send("❌ 닉네임 변경 권한 부족!")
             return
 
         # 서버 역할 부여
@@ -670,18 +670,18 @@ class ApproveView(discord.ui.View):
         pending = load_pending()
         data = pending.get(self.request_id)
         if not data:
-            await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+            await interaction.channel.send("❌ 이미 처리된 신청입니다.")
             return
 
         member = interaction.guild.get_member(data["user_id"])
         if not member:
-            await interaction.response.send_message("❌ 유저를 찾을 수 없습니다.", ephemeral=True)
+            await interaction.channel.send("❌ 유저를 찾을 수 없습니다.")
             return
 
         try:
             await member.edit(nick=data["new"])
         except discord.Forbidden:
-            await interaction.response.send_message("❌ 봇 권한 부족!", ephemeral=True)
+            await interaction.channel.send("❌ 봇 권한 부족!")
             return
 
         if data.get("new_server"):
