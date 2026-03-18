@@ -302,11 +302,28 @@ class AuthApproveView(discord.ui.View):
         self.add_item(approve_btn)
         self.add_item(reject_btn)
 
+    def _parse_message(self, content: str):
+        import re
+        user_match = re.search(r'<@(\d+)>', content)
+        server_match = re.search(r'서버: \*\*(.+?)\*\*', content)
+        level_match = re.search(r'레벨: \*\*(.+?)\*\*', content)
+        nick_match = re.search(r'닉네임: \*\*(.+?)\*\*', content)
+        if not all([user_match, server_match, level_match, nick_match]):
+            return None
+        return {
+            "user_id": int(user_match.group(1)),
+            "server": server_match.group(1),
+            "level": level_match.group(1),
+            "nickname": nick_match.group(1),
+        }
+
     async def approve(self, interaction: discord.Interaction):
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
-            await interaction.channel.send("❌ 이미 처리된 신청입니다.")
+            data = self._parse_message(interaction.message.content)
+        if not data:
+            await interaction.channel.send("❌ 신청 데이터를 찾을 수 없습니다.")
             return
 
         member = interaction.guild.get_member(data["user_id"])
@@ -364,13 +381,11 @@ class AuthApproveView(discord.ui.View):
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
-            try:
-                await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
-            except Exception:
-                await interaction.channel.send("❌ 이미 처리된 신청입니다.")
-            return
+            data = self._parse_message(interaction.message.content)
 
-        member = interaction.guild.get_member(data["user_id"])
+        member = None
+        if data:
+            member = interaction.guild.get_member(data["user_id"])
         remove_auth_pending(self.request_id)
 
         if member:
