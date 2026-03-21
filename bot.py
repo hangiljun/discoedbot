@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import os
 import json
 import uuid
-import time
+import asyncio
 
 load_dotenv()
 
@@ -459,6 +459,44 @@ async def auth_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
 
 
+# ========== 신고 패널 재등록 (디바운스) ==========
+async def _repost_panel(channel_id: int):
+    await asyncio.sleep(1)  # 1초 대기 (메시지 폭탄 시 마지막 메시지 후 1번만 실행)
+    try:
+        channel = bot.get_channel(channel_id)
+        if channel is None:
+            print(f"[REPOST] 채널을 찾을 수 없음 (id={channel_id})")
+            return
+        if report_panel_info["message_id"]:
+            try:
+                old_msg = await channel.fetch_message(report_panel_info["message_id"])
+                await old_msg.delete()
+                print(f"[REPOST] 기존 패널 삭제 완료 (id={report_panel_info['message_id']})")
+            except Exception as e:
+                print(f"[REPOST] 기존 패널 삭제 실패: {e}")
+        embed = discord.Embed(
+            title="🚨 사기 신고 민원",
+            description=(
+                "✅ **최근 늘어나는 사기 사례**\n\n"
+                "0) 당일 가입된 디코 계정으로 '친구 추가' 후 거래\n"
+                "　　**(100% 사기임)**\n\n"
+                "1) 연락처(폰번호) 제공 하지 않음\n"
+                "2) 게임내에서 만나지 않고 경매장에 아이템 올리면 구매 하겠다고함\n"
+                "3) 핸즈로 메소 확인 **(100% 사기임)**\n\n"
+                "아래 버튼을 눌러 신고를 접수해주세요."
+            ),
+            color=discord.Color.red()
+        )
+        new_msg = await channel.send(embed=embed, view=ReportButtonView())
+        report_panel_info["message_id"] = new_msg.id
+        save_report_panel_info(report_panel_info)
+        print(f"[REPOST] 신고 패널 재등록 완료 (id={new_msg.id})")
+    except asyncio.CancelledError:
+        raise  # 취소는 다시 던져야 정상 취소 처리됨
+    except Exception as e:
+        print(f"[REPOST] 패널 재등록 실패: {e}")
+
+
 # ========== 봇 DM 자동 응답 ==========
 @bot.event
 async def on_message(message: discord.Message):
@@ -469,41 +507,14 @@ async def on_message(message: discord.Message):
             "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
         )
 
-    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (2초 쿨다운)
+    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
     if (report_panel_info["channel_id"] and
             message.channel.id == report_panel_info["channel_id"]):
-        now = time.time()
-        global report_panel_last_repost
-        if now - report_panel_last_repost >= 2:
-            report_panel_last_repost = now
-            try:
-                channel = message.channel
-                # 기존 패널 삭제
-                if report_panel_info["message_id"]:
-                    try:
-                        old_msg = await channel.fetch_message(report_panel_info["message_id"])
-                        await old_msg.delete()
-                    except Exception:
-                        pass
-                # 새 패널 등록
-                embed = discord.Embed(
-                    title="🚨 사기 신고 민원",
-                    description=(
-                        "✅ **최근 늘어나는 사기 사례**\n\n"
-                        "0) 당일 가입된 디코 계정으로 '친구 추가' 후 거래\n"
-                        "　　**(100% 사기임)**\n\n"
-                        "1) 연락처(폰번호) 제공 하지 않음\n"
-                        "2) 게임내에서 만나지 않고 경매장에 아이템 올리면 구매 하겠다고함\n"
-                        "3) 핸즈로 메소 확인 **(100% 사기임)**\n\n"
-                        "아래 버튼을 눌러 신고를 접수해주세요."
-                    ),
-                    color=discord.Color.red()
-                )
-                new_msg = await channel.send(embed=embed, view=ReportButtonView())
-                report_panel_info["message_id"] = new_msg.id
-                save_report_panel_info(report_panel_info)
-            except Exception:
-                pass
+        print(f"[REPOST] 메시지 감지 → 재등록 예약 (channel={message.channel.id})")
+        global _report_repost_task
+        if _report_repost_task and not _report_repost_task.done():
+            _report_repost_task.cancel()
+        _report_repost_task = asyncio.create_task(_repost_panel(message.channel.id))
 
     await bot.process_commands(message)
 
@@ -843,7 +854,7 @@ REPORT_REASONS = [
 ]
 
 report_flow_data = {}  # user_id -> {"reason": str}
-report_panel_last_repost = 0  # 마지막 재등록 시각 (timestamp)
+_report_repost_task: asyncio.Task | None = None
 REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
 
 
