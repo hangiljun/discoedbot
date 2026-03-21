@@ -459,7 +459,7 @@ async def auth_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
 
 
-# ========== 신고 패널 재등록 (디바운스) ==========
+# ========== 신고 패널 재등록 (디바운스, 채널별) ==========
 async def _repost_panel(channel_id: int):
     await asyncio.sleep(1)  # 1초 대기 (메시지 폭탄 시 마지막 메시지 후 1번만 실행)
     try:
@@ -467,11 +467,13 @@ async def _repost_panel(channel_id: int):
         if channel is None:
             print(f"[REPOST] 채널을 찾을 수 없음 (id={channel_id})")
             return
-        if report_panel_info["message_id"]:
+        key = str(channel_id)
+        old_message_id = report_panel_info.get(key)
+        if old_message_id:
             try:
-                old_msg = await channel.fetch_message(report_panel_info["message_id"])
+                old_msg = await channel.fetch_message(old_message_id)
                 await old_msg.delete()
-                print(f"[REPOST] 기존 패널 삭제 완료 (id={report_panel_info['message_id']})")
+                print(f"[REPOST] 기존 패널 삭제 완료 (id={old_message_id})")
             except Exception as e:
                 print(f"[REPOST] 기존 패널 삭제 실패: {e}")
         embed = discord.Embed(
@@ -488,13 +490,13 @@ async def _repost_panel(channel_id: int):
             color=discord.Color.red()
         )
         new_msg = await channel.send(embed=embed, view=ReportButtonView())
-        report_panel_info["message_id"] = new_msg.id
+        report_panel_info[key] = new_msg.id
         save_report_panel_info(report_panel_info)
-        print(f"[REPOST] 신고 패널 재등록 완료 (id={new_msg.id})")
+        print(f"[REPOST] 신고 패널 재등록 완료 (channel={channel_id}, id={new_msg.id})")
     except asyncio.CancelledError:
         raise  # 취소는 다시 던져야 정상 취소 처리됨
     except Exception as e:
-        print(f"[REPOST] 패널 재등록 실패: {e}")
+        print(f"[REPOST] 패널 재등록 실패 (channel={channel_id}): {e}")
 
 
 # ========== 봇 DM 자동 응답 ==========
@@ -507,14 +509,14 @@ async def on_message(message: discord.Message):
             "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
         )
 
-    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
-    if (report_panel_info["channel_id"] and
-            message.channel.id == report_panel_info["channel_id"]):
-        print(f"[REPOST] 메시지 감지 → 재등록 예약 (channel={message.channel.id})")
-        global _report_repost_task
-        if _report_repost_task and not _report_repost_task.done():
-            _report_repost_task.cancel()
-        _report_repost_task = asyncio.create_task(_repost_panel(message.channel.id))
+    # 신고 패널 채널(여러 개 가능)에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
+    if str(message.channel.id) in report_panel_info:
+        cid = message.channel.id
+        print(f"[REPOST] 메시지 감지 → 재등록 예약 (channel={cid})")
+        existing = _report_repost_tasks.get(cid)
+        if existing and not existing.done():
+            existing.cancel()
+        _report_repost_tasks[cid] = asyncio.create_task(_repost_panel(cid))
 
     await bot.process_commands(message)
 
@@ -854,16 +856,23 @@ REPORT_REASONS = [
 ]
 
 report_flow_data = {}  # user_id -> {"reason": str}
-_report_repost_task: asyncio.Task | None = None
+_report_repost_tasks: dict[int, asyncio.Task] = {}  # channel_id -> Task
 REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
 
 
 def load_report_panel_info() -> dict:
+    """채널별 패널 메시지 ID 저장: {str(channel_id): message_id}"""
     ensure_data_dir()
     if os.path.exists(REPORT_PANEL_INFO_FILE):
         with open(REPORT_PANEL_INFO_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"channel_id": None, "message_id": None}
+            data = json.load(f)
+        # 구버전 형식 마이그레이션: {"channel_id": ..., "message_id": ...} → {str(channel_id): message_id}
+        if "channel_id" in data:
+            if data.get("channel_id"):
+                return {str(data["channel_id"]): data.get("message_id")}
+            return {}
+        return data
+    return {}
 
 
 def save_report_panel_info(data: dict):
@@ -872,7 +881,7 @@ def save_report_panel_info(data: dict):
         json.dump(data, f)
 
 
-report_panel_info = load_report_panel_info()
+report_panel_info = load_report_panel_info()  # {str(channel_id): message_id}
 
 
 def load_reports() -> dict:
@@ -1135,8 +1144,7 @@ async def report_panel(interaction: discord.Interaction):
         color=discord.Color.red()
     )
     panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
-    report_panel_info["channel_id"] = interaction.channel.id
-    report_panel_info["message_id"] = panel_msg.id
+    report_panel_info[str(interaction.channel.id)] = panel_msg.id
     save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
 
