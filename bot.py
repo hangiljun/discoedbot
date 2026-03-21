@@ -980,16 +980,6 @@ class ReportModal(discord.ui.Modal, title="사기 신고 민원"):
         except discord.Forbidden:
             pass
 
-        # 피신고자에게 경고 DM
-        if target_member:
-            try:
-                await target_member.send(
-                    f"{interaction.user.display_name}님이 **{reason}** 내용으로 신고하였습니다.\n\n"
-                    "신고 내용이 허위거나 문제가 있다고 생각하시면 관리자에게 DM을 보내주세요."
-                )
-            except discord.Forbidden:
-                pass
-
         report_flow_data.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
