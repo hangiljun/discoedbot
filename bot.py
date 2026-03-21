@@ -117,16 +117,7 @@ def remove_pending(request_id: str):
 
 # ========== 역할 변경 ==========
 async def update_server_role(member: discord.Member, new_server: str):
-    """기존 서버 역할 제거 후 새 서버 역할 부여"""
-    # 기존 서버 역할 제거
-    for role_name in SERVER_ROLES.values():
-        role = discord.utils.get(member.guild.roles, name=role_name)
-        if role and role in member.roles:
-            try:
-                await member.remove_roles(role)
-            except discord.Forbidden:
-                pass
-
+    """새 서버 역할 추가 (기존 역할 유지)"""
     # 새 서버 역할 부여
     new_role_name = SERVER_ROLES.get(new_server)
     if new_role_name:
