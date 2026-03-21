@@ -482,7 +482,7 @@ async def on_message(message: discord.Message):
     if (report_panel_info["channel_id"] and
             message.channel.id == report_panel_info["channel_id"]):
         now = time.time()
-        if now - report_panel_last_repost >= 30:
+        if now - report_panel_last_repost >= 2:
             globals()["report_panel_last_repost"] = now
             try:
                 channel = message.channel
