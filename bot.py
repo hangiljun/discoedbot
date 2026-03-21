@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import json
 import uuid
+import time
 
 load_dotenv()
 
@@ -461,7 +462,6 @@ async def auth_panel_error(interaction: discord.Interaction, error):
 # ========== 봇 DM 자동 응답 ==========
 @bot.event
 async def on_message(message: discord.Message):
-    import time
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
@@ -469,12 +469,13 @@ async def on_message(message: discord.Message):
             "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
         )
 
-    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (30초 쿨다운)
+    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (2초 쿨다운)
     if (report_panel_info["channel_id"] and
             message.channel.id == report_panel_info["channel_id"]):
         now = time.time()
+        global report_panel_last_repost
         if now - report_panel_last_repost >= 2:
-            globals()["report_panel_last_repost"] = now
+            report_panel_last_repost = now
             try:
                 channel = message.channel
                 # 기존 패널 삭제
