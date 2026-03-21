@@ -470,12 +470,48 @@ async def auth_panel_error(interaction: discord.Interaction, error):
 # ========== 봇 DM 자동 응답 ==========
 @bot.event
 async def on_message(message: discord.Message):
+    import time
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
         await message.channel.send(
             "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
         )
+
+    # 신고 패널 채널에 메시지 오면 패널 맨 아래로 재등록 (30초 쿨다운)
+    if (report_panel_info["channel_id"] and
+            message.channel.id == report_panel_info["channel_id"]):
+        now = time.time()
+        if now - report_panel_last_repost >= 30:
+            globals()["report_panel_last_repost"] = now
+            try:
+                channel = message.channel
+                # 기존 패널 삭제
+                if report_panel_info["message_id"]:
+                    try:
+                        old_msg = await channel.fetch_message(report_panel_info["message_id"])
+                        await old_msg.delete()
+                    except Exception:
+                        pass
+                # 새 패널 등록
+                embed = discord.Embed(
+                    title="🚨 사기 신고 민원",
+                    description=(
+                        "✅ **최근 늘어나는 사기 사례**\n\n"
+                        "1) 폰번호 안준다\n"
+                        "2) 게임에서 안만난다\n"
+                        "3) 게임내에서 만나면 정지 먹는다고 거짓말을 한다 (정지 안먹음)\n"
+                        "4) 밖이라고 경매장에 아이템올리면 핸즈로 구매한다고 한다\n"
+                        "5) 메소 확인을 조작된 핸즈로만 보여준다\n\n"
+                        "아래 버튼을 눌러 신고를 접수해주세요."
+                    ),
+                    color=discord.Color.red()
+                )
+                new_msg = await channel.send(embed=embed, view=ReportButtonView())
+                report_panel_info["message_id"] = new_msg.id
+            except Exception:
+                pass
+
     await bot.process_commands(message)
 
 
@@ -814,6 +850,8 @@ REPORT_REASONS = [
 ]
 
 report_flow_data = {}  # user_id -> {"reason": str}
+report_panel_info = {"channel_id": None, "message_id": None}  # 패널 위치 추적
+report_panel_last_repost = 0  # 마지막 재등록 시각 (timestamp)
 
 
 def load_reports() -> dict:
@@ -1072,7 +1110,9 @@ async def report_panel(interaction: discord.Interaction):
         ),
         color=discord.Color.red()
     )
-    await interaction.channel.send(embed=embed, view=ReportButtonView())
+    panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
+    report_panel_info["channel_id"] = interaction.channel.id
+    report_panel_info["message_id"] = panel_msg.id
     await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
 
 
