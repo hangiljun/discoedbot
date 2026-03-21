@@ -1008,10 +1008,17 @@ class ReportAdminView(discord.ui.View):
             style=discord.ButtonStyle.danger,
             custom_id=f"report_role_{report_id}"
         )
+        confirm_btn = discord.ui.Button(
+            label="✅ 확인 완료",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"report_confirm_{report_id}"
+        )
         notify_btn.callback = self.notify
         role_btn.callback = self.remove_role
+        confirm_btn.callback = self.confirm
         self.add_item(notify_btn)
         self.add_item(role_btn)
+        self.add_item(confirm_btn)
 
     async def notify(self, interaction: discord.Interaction):
         if not self.target_id:
@@ -1060,6 +1067,12 @@ class ReportAdminView(discord.ui.View):
             f"✅ {target_member.display_name} 역할 제거 완료\n제거된 역할: {', '.join(removed) if removed else '없음'}",
             ephemeral=True
         )
+
+    async def confirm(self, interaction: discord.Interaction):
+        for child in self.children:
+            child.disabled = True
+        await interaction.message.edit(view=self)
+        await interaction.response.send_message("✅ 신고 처리 완료로 표시됐습니다.", ephemeral=True)
 
 
 # ========== 신고 버튼 패널 ==========
