@@ -500,6 +500,7 @@ async def on_message(message: discord.Message):
                 )
                 new_msg = await channel.send(embed=embed, view=ReportButtonView())
                 report_panel_info["message_id"] = new_msg.id
+                save_report_panel_info(report_panel_info)
             except Exception:
                 pass
 
@@ -841,8 +842,25 @@ REPORT_REASONS = [
 ]
 
 report_flow_data = {}  # user_id -> {"reason": str}
-report_panel_info = {"channel_id": None, "message_id": None}  # 패널 위치 추적
 report_panel_last_repost = 0  # 마지막 재등록 시각 (timestamp)
+REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
+
+
+def load_report_panel_info() -> dict:
+    ensure_data_dir()
+    if os.path.exists(REPORT_PANEL_INFO_FILE):
+        with open(REPORT_PANEL_INFO_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"channel_id": None, "message_id": None}
+
+
+def save_report_panel_info(data: dict):
+    ensure_data_dir()
+    with open(REPORT_PANEL_INFO_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+report_panel_info = load_report_panel_info()
 
 
 def load_reports() -> dict:
@@ -1107,6 +1125,7 @@ async def report_panel(interaction: discord.Interaction):
     panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
     report_panel_info["channel_id"] = interaction.channel.id
     report_panel_info["message_id"] = panel_msg.id
+    save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
 
 
