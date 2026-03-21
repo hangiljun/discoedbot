@@ -799,6 +799,294 @@ async def nickname_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
 
 
+# ========== 신고 민원 ==========
+REPORT_ADMIN_CHANNEL_ID = int(os.getenv("REPORT_ADMIN_CHANNEL_ID", "1483774833761452213"))
+REPORT_MANAGER_ID = 1059792897509163028
+REPORT_FILE = "/data/reports.json"
+
+REPORT_REASONS = [
+    "입금한 뒤 연락 두절",
+    "폰번호를 안준다",
+    "게임내에서 만나지 않고 경매장으로만 하려고 한다",
+    "메소 확인을 안시켜 준다",
+    "사기는 아니지만 사기 의심스럽다",
+    "이외 내용으로 신고",
+]
+
+report_flow_data = {}  # user_id -> {"reason": str}
+
+
+def load_reports() -> dict:
+    ensure_data_dir()
+    if os.path.exists(REPORT_FILE):
+        with open(REPORT_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_reports(data: dict):
+    ensure_data_dir()
+    with open(REPORT_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def get_report_count(target_nick: str) -> int:
+    reports = load_reports()
+    return sum(1 for r in reports.values() if r.get("target_nick") == target_nick)
+
+
+def add_report(report_id: str, reporter_id: int, target_nick: str, reason: str):
+    reports = load_reports()
+    reports[report_id] = {
+        "reporter_id": reporter_id,
+        "target_nick": target_nick,
+        "reason": reason,
+        "date": datetime.now(timezone.utc).isoformat()
+    }
+    save_reports(reports)
+
+
+def find_member_by_nick(guild: discord.Guild, nick: str) -> discord.Member | None:
+    nick_lower = nick.lower().strip()
+    for member in guild.members:
+        display = (member.nick or member.display_name or "").lower()
+        if nick_lower in display:
+            return member
+    return None
+
+
+# ========== 신고 사유 선택 뷰 ==========
+class ReportReasonSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+        self.reason = None
+
+    @discord.ui.select(
+        placeholder="신고 사유를 선택하세요",
+        custom_id="report_reason_select",
+        options=[discord.SelectOption(label=r, value=r) for r in REPORT_REASONS]
+    )
+    async def reason_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        report_flow_data[interaction.user.id] = {"reason": select.values[0]}
+        await interaction.response.send_modal(ReportModal())
+
+
+# ========== 신고 모달 ==========
+class ReportModal(discord.ui.Modal, title="사기 신고 민원"):
+    target_nick = discord.ui.TextInput(
+        label="상대방 디스코드 닉네임",
+        placeholder="상대방 채널 닉네임 입력 (모르면 '모름' 입력)",
+        required=True,
+        max_length=100
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        data = report_flow_data.get(interaction.user.id)
+        if not data:
+            await interaction.response.send_message("❌ 다시 처음부터 신청해주세요.", ephemeral=True)
+            return
+
+        reason = data["reason"]
+        target_nick_val = self.target_nick.value.strip()
+        report_id = str(uuid.uuid4())[:8]
+
+        add_report(report_id, interaction.user.id, target_nick_val, reason)
+
+        target_member = find_member_by_nick(interaction.guild, target_nick_val) if target_nick_val != "모름" else None
+        report_count = get_report_count(target_nick_val)
+
+        reporter_mention = interaction.user.mention
+        target_mention = target_member.mention if target_member else f"`{target_nick_val}` (미확인)"
+
+        report_channel = bot.get_channel(REPORT_ADMIN_CHANNEL_ID)
+        if report_channel:
+            view = ReportAdminView(
+                report_id=report_id,
+                reporter_id=interaction.user.id,
+                target_id=target_member.id if target_member else None,
+                target_nick=target_nick_val,
+                reason=reason
+            )
+            bot.add_view(view)
+            await report_channel.send(
+                f"🚨 **사기 신고 접수**\n"
+                f"신고자: {reporter_mention}\n"
+                f"피신고자: {target_mention}\n"
+                f"신고 사유: **{reason}**\n"
+                f"누적 신고 횟수: **{report_count}회**",
+                view=view
+            )
+
+        # 관리자 DM
+        manager = interaction.guild.get_member(REPORT_MANAGER_ID)
+        if manager:
+            try:
+                await manager.send(
+                    f"🚨 **사기 신고 접수**\n"
+                    f"신고자: {reporter_mention}\n"
+                    f"피신고자: {target_mention}\n"
+                    f"신고 사유: **{reason}**\n"
+                    f"누적 신고 횟수: **{report_count}회**"
+                )
+            except discord.Forbidden:
+                pass
+
+        # 신고자에게 DM
+        try:
+            await interaction.user.send(
+                "신고는 관리자에게 즉시 전달 되었습니다.\n"
+                "신속하게 처리 도와드리겠습니다. 추가 문의가 있다면 관리자에게 DM을 보내주세요.\n\n"
+                "추가로 사기를 당하셨다면 아래 주소를 참고해서 경찰에 신고해주세요.\n"
+                "https://maplesayo.com/공지사항/?mod=document&uid=6"
+            )
+        except discord.Forbidden:
+            pass
+
+        # 피신고자에게 경고 DM
+        if target_member:
+            try:
+                await target_member.send(
+                    f"{interaction.user.display_name}님이 **{reason}** 내용으로 신고하였습니다.\n\n"
+                    "신고 내용이 허위거나 문제가 있다고 생각하시면 관리자에게 DM을 보내주세요."
+                )
+            except discord.Forbidden:
+                pass
+
+        report_flow_data.pop(interaction.user.id, None)
+
+        await interaction.response.send_message(
+            "✅ 신고가 접수됐습니다. 관리자에게 즉시 전달됩니다.",
+            ephemeral=True
+        )
+
+
+# ========== 관리자 신고 처리 버튼 ==========
+class ReportAdminView(discord.ui.View):
+    def __init__(self, report_id: str, reporter_id: int, target_id: int | None, target_nick: str, reason: str):
+        super().__init__(timeout=None)
+        self.report_id = report_id
+        self.reporter_id = reporter_id
+        self.target_id = target_id
+        self.target_nick = target_nick
+        self.reason = reason
+
+        notify_btn = discord.ui.Button(
+            label="📣 알림발송",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"report_notify_{report_id}"
+        )
+        role_btn = discord.ui.Button(
+            label="🗑️ 역할 빼기",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"report_role_{report_id}"
+        )
+        notify_btn.callback = self.notify
+        role_btn.callback = self.remove_role
+        self.add_item(notify_btn)
+        self.add_item(role_btn)
+
+    async def notify(self, interaction: discord.Interaction):
+        if not self.target_id:
+            await interaction.response.send_message("❌ 피신고자 ID를 특정할 수 없습니다.", ephemeral=True)
+            return
+
+        target_member = interaction.guild.get_member(self.target_id)
+        reporter_member = interaction.guild.get_member(self.reporter_id)
+
+        if not target_member:
+            await interaction.response.send_message("❌ 피신고자를 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        try:
+            reporter_name = reporter_member.display_name if reporter_member else "알 수 없음"
+            await target_member.send(
+                f"**[메이플디스코드 신고 알림]**\n\n"
+                f"{reporter_name}님이 **{self.reason}** 사유로 신고하였습니다.\n\n"
+                "신고 내용이 허위거나 문제가 있다고 생각하시면 관리자에게 DM을 보내주세요."
+            )
+            await interaction.response.send_message("✅ 피신고자에게 알림 DM 발송 완료", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 피신고자 DM 발송 실패 (DM 차단)", ephemeral=True)
+
+    async def remove_role(self, interaction: discord.Interaction):
+        if not self.target_id:
+            await interaction.response.send_message("❌ 피신고자 ID를 특정할 수 없습니다.", ephemeral=True)
+            return
+
+        target_member = interaction.guild.get_member(self.target_id)
+        if not target_member:
+            await interaction.response.send_message("❌ 피신고자를 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        removed = []
+        for role in target_member.roles:
+            if role.name == "@everyone":
+                continue
+            try:
+                await target_member.remove_roles(role)
+                removed.append(role.name)
+            except discord.Forbidden:
+                pass
+
+        await interaction.response.send_message(
+            f"✅ {target_member.display_name} 역할 제거 완료\n제거된 역할: {', '.join(removed) if removed else '없음'}",
+            ephemeral=True
+        )
+
+
+# ========== 신고 버튼 패널 ==========
+class ReportButtonView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🚨 사기 신고 민원", style=discord.ButtonStyle.danger, custom_id="report_request")
+    async def report_request(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = ReportReasonSelectView()
+        await interaction.response.send_message(
+            "📋 신고 사유를 선택해주세요:",
+            view=view,
+            ephemeral=True
+        )
+
+
+@bot.tree.command(name="신고패널", description="사기 신고 민원 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def report_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    async for message in interaction.channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🚨 사기 신고 민원":
+                await message.delete()
+
+    embed = discord.Embed(
+        title="🚨 사기 신고 민원",
+        description=(
+            "✅ **최근 늘어나는 사기 사례**\n\n"
+            "1) 폰번호 안준다\n"
+            "2) 게임에서 안만난다\n"
+            "3) 게임내에서 만나면 정지 먹는다고 거짓말을 한다 (정지 안먹음)\n"
+            "4) 밖이라고 경매장에 아이템올리면 핸즈로 구매한다고 한다\n"
+            "5) 메소 확인을 조작된 핸즈로만 보여준다\n\n"
+            "아래 버튼을 눌러 신고를 접수해주세요."
+        ),
+        color=discord.Color.red()
+    )
+    await interaction.channel.send(embed=embed, view=ReportButtonView())
+    await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
+
+
+@report_panel.error
+async def report_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            pass
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -806,6 +1094,7 @@ async def on_ready():
         await bot.tree.sync(guild=guild)
     bot.add_view(NicknameButtonView())
     bot.add_view(AuthButtonView())
+    bot.add_view(ReportButtonView())
 
     pending = load_pending()
     for request_id in pending:
