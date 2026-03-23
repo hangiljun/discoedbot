@@ -290,10 +290,17 @@ class AuthApproveView(discord.ui.View):
             style=discord.ButtonStyle.danger,
             custom_id=f"auth_reject_{request_id}"
         )
+        underage_btn = discord.ui.Button(
+            label="⚠️ 30일 미만 계정",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"auth_underage_{request_id}"
+        )
         approve_btn.callback = self.approve
         reject_btn.callback = self.reject
+        underage_btn.callback = self.underage
         self.add_item(approve_btn)
         self.add_item(reject_btn)
+        self.add_item(underage_btn)
 
     def _parse_message(self, content: str):
         import re
@@ -406,6 +413,38 @@ class AuthApproveView(discord.ui.View):
             pass
         await interaction.message.edit(view=self)
         await interaction.channel.send("❌ 핸즈 인증 신청 거절 완료")
+
+    async def underage(self, interaction: discord.Interaction):
+        pending = load_auth_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            data = self._parse_message(interaction.message.content)
+
+        member = None
+        if data:
+            member = interaction.guild.get_member(data["user_id"])
+        remove_auth_pending(self.request_id)
+
+        if member:
+            try:
+                await member.send(
+                    "**[메이플디스코드 핸즈인증 안내]**\n\n"
+                    "선생님, 저희 채널 디스코드 정책상\n"
+                    "30일 미만 계정은 핸즈인증 후 역할 부여가 안됩니다.\n\n"
+                    "30일 이후 재신청 하시거나\n"
+                    "다른 아이디로 재신청 부탁드립니다."
+                )
+            except discord.Forbidden:
+                pass
+
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
+        await interaction.message.edit(view=self)
+        await interaction.channel.send("⚠️ 30일 미만 계정 안내 DM 발송 완료")
 
 
 # ========== 핸즈 인증 버튼 패널 ==========
