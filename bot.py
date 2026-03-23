@@ -526,6 +526,7 @@ async def on_message(message: discord.Message):
         r'(?:discord(?:app)?\.com/invite|discord\.gg|dsc\.gg|discords\.gg)'
         r'/([A-Za-z0-9\-]+)'
     )
+    print(f"[INVITE] on_message content='{message.content[:80]}' channel={message.channel.id}")
     matches = INVITE_PATTERN.findall(message.content)
     external = [code for code in matches if code.lower() != OWN_INVITE_CODE.lower()]
     if external:
