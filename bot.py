@@ -918,7 +918,9 @@ def find_member_by_nick(guild: discord.Guild, nick: str) -> discord.Member | Non
     nick_lower = nick.lower().strip()
     for member in guild.members:
         display = (member.nick or member.display_name or "").lower()
-        if nick_lower == display:
+        # 서버/레벨/닉네임 형식에서 마지막 닉네임 부분만 비교
+        last_part = display.split("/")[-1].strip()
+        if nick_lower == last_part or nick_lower == display:
             return member
     return None
 
