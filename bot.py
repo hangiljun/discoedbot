@@ -554,7 +554,7 @@ async def on_member_join(member: discord.Member):
 
 # ========== 닉네임 패널 자동 재생성 ==========
 async def refresh_nickname_panel(channel: discord.TextChannel):
-    async for message in channel.history(limit=50):
+    async for message in channel.history(limit=200):
         if message.author == bot.user and message.embeds:
             if message.embeds[0].title == "📝 닉네임 변경 신청":
                 await message.delete()
@@ -918,7 +918,7 @@ def find_member_by_nick(guild: discord.Guild, nick: str) -> discord.Member | Non
     nick_lower = nick.lower().strip()
     for member in guild.members:
         display = (member.nick or member.display_name or "").lower()
-        if nick_lower in display:
+        if nick_lower == display:
             return member
     return None
 
@@ -1133,13 +1133,12 @@ async def report_panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🚨 사기 신고 민원",
         description=(
-            "✅ **최근 늘어나는 사기 사례**\n\n"
-            "0) 당일 가입된 디코 계정으로 '친구 추가' 후 거래\n"
-            "　　**(100% 사기임)**\n\n"
-            "1) 연락처(폰번호) 제공 하지 않음\n"
-            "2) 게임내에서 만나지 않고 경매장에 아이템 올리면 구매 하겠다고함\n"
-            "3) 핸즈로 메소 확인 **(100% 사기임)**\n\n"
-            "아래 버튼을 눌러 신고를 접수해주세요."
+            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
+            "• 연락처(폰번호) 미제공\n"
+            "• 게임 내 거래 없이 경매장 거래만 유도\n"
+            "• 핸즈로만 메소 확인 유도\n\n"
+            "아래 버튼을 눌러 신고를 접수해 주세요."
         ),
         color=discord.Color.red()
     )
