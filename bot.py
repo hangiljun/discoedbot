@@ -428,9 +428,9 @@ class AuthButtonView(discord.ui.View):
 async def auth_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
-    async for message in interaction.channel.history(limit=50):
+    async for message in interaction.channel.history(limit=200):
         if message.author == bot.user and message.embeds:
-            if message.embeds[0].title == "🍁 핸즈 인증 신청":
+            if message.embeds[0].title == "핸즈인증 신청 방법":
                 await message.delete()
 
     embed = discord.Embed(
@@ -814,7 +814,7 @@ class NicknameButtonView(discord.ui.View):
 async def nickname_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
-    async for message in interaction.channel.history(limit=50):
+    async for message in interaction.channel.history(limit=200):
         if message.author == bot.user and message.embeds:
             if message.embeds[0].title == "📝 닉네임 변경 신청":
                 await message.delete()
@@ -1180,7 +1180,17 @@ async def on_ready():
     for request_id in auth_pending:
         bot.add_view(AuthApproveView(request_id=request_id))
 
-    print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건")
+    reports = load_reports()
+    for report_id, r in reports.items():
+        bot.add_view(ReportAdminView(
+            report_id=report_id,
+            reporter_id=r.get("reporter_id", 0),
+            target_id=None,
+            target_nick=r.get("target_nick", ""),
+            reason=r.get("reason", "")
+        ))
+
+    print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
 bot.run(BOT_TOKEN)
