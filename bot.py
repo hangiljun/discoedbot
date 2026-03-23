@@ -7,7 +7,6 @@ import os
 import json
 import uuid
 import asyncio
-import re
 
 load_dotenv()
 
@@ -518,30 +517,6 @@ async def on_message(message: discord.Message):
         if existing and not existing.done():
             existing.cancel()
         _report_repost_tasks[cid] = asyncio.create_task(_repost_panel(cid))
-
-    # 외부 디스코드 초대 링크 감지 → 관리자 채널 알림
-    OWN_INVITE_CODE = "2UwBw8dnSv"
-    INVITE_PATTERN = re.compile(
-        r'(?i)(?:https?://)?(?:www\.)?'
-        r'(?:discord(?:app)?\.com/invite|discord\.gg|dsc\.gg|discords\.gg)'
-        r'/([A-Za-z0-9\-]+)'
-    )
-    print(f"[INVITE] on_message content='{message.content[:80]}' channel={message.channel.id}")
-    matches = INVITE_PATTERN.findall(message.content)
-    external = [code for code in matches if code.lower() != OWN_INVITE_CODE.lower()]
-    if external:
-        admin_channel = bot.get_channel(ADMIN_CHANNEL_ID)
-        if admin_channel:
-            embed = discord.Embed(
-                title="⚠️ 외부 디스코드 초대 링크 감지",
-                color=discord.Color.orange()
-            )
-            embed.add_field(name="작성자", value=f"{message.author.mention} (`{message.author}`)", inline=False)
-            embed.add_field(name="채널", value=message.channel.mention, inline=False)
-            embed.add_field(name="감지된 링크", value="\n".join(f"`discord.gg/{c}`" for c in external), inline=False)
-            embed.add_field(name="원본 메시지", value=message.content[:500], inline=False)
-            embed.timestamp = message.created_at
-            await admin_channel.send(embed=embed)
 
     await bot.process_commands(message)
 
