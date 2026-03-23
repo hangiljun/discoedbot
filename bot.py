@@ -506,7 +506,9 @@ async def on_message(message: discord.Message):
         return
     if isinstance(message.channel, discord.DMChannel):
         await message.channel.send(
-            "안녕하세요! 저는 로봇이에요 🤖\n관리자에게 DM을 보내주세요."
+            "안녕하세요! 저는 메이플 디스코드 민원 업무를 담당하고 있습니다.\n"
+            "제가 자동 민원만 처리 해드리고 개인적인 문제는\n"
+            "채널 내 우측 상단 메이플 디스코드 관리자에게 DM을 보내주세요."
         )
 
     # 신고 패널 채널(여러 개 가능)에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
