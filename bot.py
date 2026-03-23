@@ -146,14 +146,15 @@ def save_auth_pending(pending: dict):
     with open(AUTH_PENDING_FILE, "w", encoding="utf-8") as f:
         json.dump(pending, f, ensure_ascii=False, indent=2)
 
-def add_auth_pending(request_id: str, user_id: int, server: str, level: str, nickname: str, method: str):
+def add_auth_pending(request_id: str, user_id: int, server: str, level: str, nickname: str, method: str, is_underage: bool = False):
     pending = load_auth_pending()
     pending[request_id] = {
         "user_id": user_id,
         "server": server,
         "level": level,
         "nickname": nickname,
-        "method": method
+        "method": method,
+        "is_underage": is_underage
     }
     save_auth_pending(pending)
 
@@ -251,10 +252,11 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
             await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
             return
 
+        is_underage = days < 30
         request_id = str(uuid.uuid4())[:8]
-        add_auth_pending(request_id, interaction.user.id, server, level_val, nickname_val, method)
+        add_auth_pending(request_id, interaction.user.id, server, level_val, nickname_val, method, is_underage)
 
-        view = AuthApproveView(request_id=request_id)
+        view = AuthApproveView(request_id=request_id, is_underage=is_underage)
         bot.add_view(view)
 
         await admin_channel.send(
@@ -276,7 +278,7 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
 
 # ========== 핸즈 인증 관리자 승인/거절 ==========
 class AuthApproveView(discord.ui.View):
-    def __init__(self, request_id: str):
+    def __init__(self, request_id: str, is_underage: bool = False):
         super().__init__(timeout=None)
         self.request_id = request_id
 
@@ -290,17 +292,19 @@ class AuthApproveView(discord.ui.View):
             style=discord.ButtonStyle.danger,
             custom_id=f"auth_reject_{request_id}"
         )
-        underage_btn = discord.ui.Button(
-            label="⚠️ 30일 미만 계정",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"auth_underage_{request_id}"
-        )
         approve_btn.callback = self.approve
         reject_btn.callback = self.reject
-        underage_btn.callback = self.underage
         self.add_item(approve_btn)
         self.add_item(reject_btn)
-        self.add_item(underage_btn)
+
+        if is_underage:
+            underage_btn = discord.ui.Button(
+                label="⚠️ 30일 미만 계정",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"auth_underage_{request_id}"
+            )
+            underage_btn.callback = self.underage
+            self.add_item(underage_btn)
 
     def _parse_message(self, content: str):
         import re
@@ -1216,8 +1220,8 @@ async def on_ready():
         bot.add_view(ApproveView(request_id=request_id))
 
     auth_pending = load_auth_pending()
-    for request_id in auth_pending:
-        bot.add_view(AuthApproveView(request_id=request_id))
+    for request_id, data in auth_pending.items():
+        bot.add_view(AuthApproveView(request_id=request_id, is_underage=data.get("is_underage", False)))
 
     reports = load_reports()
     for report_id, r in reports.items():
