@@ -416,7 +416,16 @@ class AuthApproveView(discord.ui.View):
         except Exception:
             pass
         await interaction.message.edit(view=self)
-        await interaction.channel.send("❌ 핸즈 인증 신청 거절 완료")
+        if data:
+            user_str = member.mention if member else f"`{data.get('user_id')}`"
+            server = data.get('server', '?')
+            nickname = data.get('nickname', '?')
+            await interaction.channel.send(
+                f"❌ 핸즈 인증 신청 거절 완료\n"
+                f"신청자: {user_str} | 서버: {server} | 닉네임: {nickname}"
+            )
+        else:
+            await interaction.channel.send("❌ 핸즈 인증 신청 거절 완료")
 
     async def underage(self, interaction: discord.Interaction):
         pending = load_auth_pending()
