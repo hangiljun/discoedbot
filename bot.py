@@ -1015,9 +1015,9 @@ class ReportModal(discord.ui.Modal, title="사기 신고 민원"):
         target_nick_val = self.target_nick.value.strip()
         report_id = str(uuid.uuid4())[:8]
 
-        add_report(report_id, interaction.user.id, target_nick_val, reason, target_member.id if target_member else None)
-
         target_member = find_member_by_nick(interaction.guild, target_nick_val) if target_nick_val != "모름" else None
+
+        add_report(report_id, interaction.user.id, target_nick_val, reason, target_member.id if target_member else None)
         report_count = get_report_count(target_nick_val)
 
         reporter_mention = interaction.user.mention
