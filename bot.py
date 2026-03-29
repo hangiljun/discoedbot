@@ -486,7 +486,7 @@ async def auth_panel(interaction: discord.Interaction):
                 await message.delete()
 
     embed = discord.Embed(
-        description="인증 사진을 보내신분만 인증 신청 버튼 클릭하세요\n\n⏱️ 신청 후 **2시간 이내**에 처리됩니다.",
+        description="꼭 인증 사진을 보내시고 인증 신청 버튼 눌러주세요\n\n⏱️ 신청 후 **2시간 이내**에 처리됩니다.",
         color=discord.Color.green()
     )
     await interaction.channel.send(embed=embed, view=AuthButtonView())
