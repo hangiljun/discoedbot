@@ -164,7 +164,7 @@ def remove_auth_pending(request_id: str):
     save_auth_pending(pending)
 
 
-# ========== 핸즈 인증 - 서버 선택 드롭다운 ==========
+# ========== 인증 - 서버 선택 드롭다운 ==========
 class AuthServerSelectView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
@@ -178,12 +178,12 @@ class AuthServerSelectView(discord.ui.View):
         auth_flow_data[interaction.user.id] = {"server": select.values[0]}
         view = AuthPhotoMethodView()
         await interaction.response.edit_message(
-            content=f"✅ 서버: **{select.values[0]}**\n\n📸 핸즈 인증 사진을 어디로 보내셨나요?",
+            content=f"✅ 서버: **{select.values[0]}**\n\n📸 인증 사진을 어디로 보내셨나요?",
             view=view
         )
 
 
-# ========== 핸즈 인증 - DM/카톡 선택 ==========
+# ========== 인증 - DM/카톡 선택 ==========
 class AuthPhotoMethodView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
@@ -203,8 +203,8 @@ class AuthPhotoMethodView(discord.ui.View):
         await interaction.response.send_modal(AuthModal())
 
 
-# ========== 핸즈 인증 모달 (레벨 + 닉네임) ==========
-class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
+# ========== 인증 모달 (레벨 + 닉네임) ==========
+class AuthModal(discord.ui.Modal, title="인증 신청"):
     level = discord.ui.TextInput(
         label="레벨",
         placeholder="숫자만 입력 (1~300)",
@@ -260,7 +260,7 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
         bot.add_view(view)
 
         await admin_channel.send(
-            f"🔐 **핸즈 인증 신청**\n"
+            f"🔐 **인증 신청**\n"
             f"신청자: {interaction.user.mention}\n"
             f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
             f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`\n"
@@ -271,12 +271,12 @@ class AuthModal(discord.ui.Modal, title="핸즈 인증 신청"):
         auth_flow_data.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
-            "✅ 핸즈 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
+            "✅ 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
             ephemeral=True
         )
 
 
-# ========== 핸즈 인증 관리자 승인/거절 ==========
+# ========== 인증 관리자 승인/거절 ==========
 class AuthApproveView(discord.ui.View):
     def __init__(self, request_id: str, is_underage: bool = False):
         super().__init__(timeout=None)
@@ -359,7 +359,7 @@ class AuthApproveView(discord.ui.View):
         # 유저에게 DM 전송
         try:
             await member.send(
-                "**[핸즈인증 완료]**\n\n"
+                "**[인증 완료]**\n\n"
                 "★ 거래 전 주의 사항 참고 하세요★\n"
                 "https://www.maplediscord.com/tip\n\n"
                 "★친구초대★\n"
@@ -378,7 +378,7 @@ class AuthApproveView(discord.ui.View):
             pass
         await interaction.message.edit(view=self)
         await interaction.channel.send(
-            f"✅ {member.mention} 핸즈 인증 완료!\n닉네임: `{combined_nick}` | 역할 부여 완료"
+            f"✅ {member.mention} 인증 완료!\n닉네임: `{combined_nick}` | 역할 부여 완료"
         )
 
     async def reject(self, interaction: discord.Interaction):
@@ -395,12 +395,12 @@ class AuthApproveView(discord.ui.View):
         if member:
             try:
                 await member.send(
-                    "**[메이플디스코드 핸즈인증 거절]**\n\n"
-                    "메이플디스코드 핸즈인증 승인이 거절 되었습니다.\n"
+                    "**[메이플디스코드 인증 거절]**\n\n"
+                    "메이플디스코드 인증 승인이 거절 되었습니다.\n"
                     "사유는 아래 중 하나 입니다. 참고해주세요.\n\n"
                     "1️⃣ 디스코드 가입일이 30일 이내 계정\n\n"
-                    "2️⃣ 핸즈인증 사진이 첨부되지 않았어요\n"
-                    "　　게임 내 사진 및 메이플스토리 핸즈인증 사진을 보내주세요\n\n"
+                    "2️⃣ 인증 사진이 첨부되지 않았어요\n"
+                    "　　메이플스토리 인증 사진을 보내주세요\n\n"
                     "3️⃣ 캐릭터를 검색해보니 아이템이 하나도 없거나\n"
                     "　　최근 육성하지 않으신 분인 것 같습니다\n\n"
                     "위와 같은 내용에 해당되지 않는데 거절이 되었다면\n"
@@ -421,11 +421,11 @@ class AuthApproveView(discord.ui.View):
             server = data.get('server', '?')
             nickname = data.get('nickname', '?')
             await interaction.channel.send(
-                f"❌ 핸즈 인증 신청 거절 완료\n"
+                f"❌ 인증 신청 거절 완료\n"
                 f"신청자: {user_str} | 서버: {server} | 닉네임: {nickname}"
             )
         else:
-            await interaction.channel.send("❌ 핸즈 인증 신청 거절 완료")
+            await interaction.channel.send("❌ 인증 신청 거절 완료")
 
     async def underage(self, interaction: discord.Interaction):
         pending = load_auth_pending()
@@ -441,9 +441,9 @@ class AuthApproveView(discord.ui.View):
         if member:
             try:
                 await member.send(
-                    "**[메이플디스코드 핸즈인증 안내]**\n\n"
+                    "**[메이플디스코드 인증 안내]**\n\n"
                     "선생님, 저희 채널 디스코드 정책상\n"
-                    "30일 미만 계정은 핸즈인증 후 역할 부여가 안됩니다.\n\n"
+                    "30일 미만 계정은 인증 후 역할 부여가 안됩니다.\n\n"
                     "30일 이후 재신청 하시거나\n"
                     "다른 아이디로 재신청 부탁드립니다."
                 )
@@ -460,12 +460,12 @@ class AuthApproveView(discord.ui.View):
         await interaction.channel.send("⚠️ 30일 미만 계정 안내 DM 발송 완료")
 
 
-# ========== 핸즈 인증 버튼 패널 ==========
+# ========== 인증 버튼 패널 ==========
 class AuthButtonView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🔐 핸즈 인증 신청", style=discord.ButtonStyle.success, custom_id="auth_request")
+    @discord.ui.button(label="🔐 인증 신청", style=discord.ButtonStyle.success, custom_id="auth_request")
     async def auth_request(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = AuthServerSelectView()
         await interaction.response.send_message(
@@ -475,18 +475,18 @@ class AuthButtonView(discord.ui.View):
         )
 
 
-@bot.tree.command(name="인증패널", description="핸즈 인증 신청 버튼 생성 (관리자 전용)")
+@bot.tree.command(name="인증패널", description="인증 신청 버튼 생성 (관리자 전용)")
 @app_commands.checks.has_permissions(administrator=True)
 async def auth_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
     async for message in interaction.channel.history(limit=200):
         if message.author == bot.user and message.embeds:
-            if message.embeds[0].title == "핸즈인증 신청 방법":
+            if message.embeds[0].title == "인증 신청 방법":
                 await message.delete()
 
     embed = discord.Embed(
-        title="핸즈인증 신청 방법",
+        title="인증 신청 방법",
         description=(
             "**절차:**\n"
             "1️⃣ 카카오톡 또는 우측상단 관리자에게\n"
@@ -587,7 +587,7 @@ async def on_member_join(member: discord.Member):
                 f"안녕하세요 {member.mention}님!\n\n"
                 f"⚠️ 디스코드 계정 생성일이 **{days}일** 밖에 되지 않아 "
                 f"역할 부여가 제한됩니다.\n"
-                f"디스코드 가입 후 **30일이 지나면** 다시 핸즈인증 신청해 주세요.\n\n"
+                f"디스코드 가입 후 **30일이 지나면** 다시 인증 신청해 주세요.\n\n"
                 f"메이플랜드는 한달 이내도 이용 가능합니다."
             )
         except discord.Forbidden:
