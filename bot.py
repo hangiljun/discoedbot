@@ -482,20 +482,11 @@ async def auth_panel(interaction: discord.Interaction):
 
     async for message in interaction.channel.history(limit=200):
         if message.author == bot.user and message.embeds:
-            if message.embeds[0].title == "인증 신청 방법":
+            if "꼭 관리자에게 인증 사진" in (message.embeds[0].description or "") or message.embeds[0].title == "인증 신청 방법":
                 await message.delete()
 
     embed = discord.Embed(
-        title="인증 신청 방법",
-        description=(
-            "**절차:**\n"
-            "1️⃣ 아래 버튼 클릭\n"
-            "2️⃣ 메이플 서버 선택\n"
-            "3️⃣ 인증 사진 보낸 위치 선택 (카톡 / DM)\n"
-            "4️⃣ 메이플 레벨 및 닉네임 입력\n"
-            "5️⃣ 관리자 확인 후 역할 부여\n\n"
-            "⏱️ 신청 후 **2시간 이내**에 처리됩니다."
-        ),
+        description="✅ 꼭 관리자에게 인증 사진을 보내고 인증 신청 버튼 클릭하세요",
         color=discord.Color.green()
     )
     await interaction.channel.send(embed=embed, view=AuthButtonView())
