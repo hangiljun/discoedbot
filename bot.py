@@ -490,7 +490,7 @@ async def auth_panel(interaction: discord.Interaction):
         description=(
             "**절차:**\n"
             "1️⃣ 카카오톡 또는 우측상단 관리자에게\n"
-            "2️⃣ 핸즈사진 + 게임 내 사진, 디스코드 닉네임 전달 후\n"
+            "2️⃣ 인증 사진 <사진참조> 전달 후\n"
             "3️⃣ 아래 버튼 클릭\n"
             "4️⃣ 서버 선택\n"
             "5️⃣ 인증 사진 보낸 위치 선택 (카톡 / DM)\n"
