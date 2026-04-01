@@ -169,7 +169,7 @@ class AuthPhotoCheckView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=300)
 
-    @discord.ui.button(label="✅ 네, DM으로 보냈어요", style=discord.ButtonStyle.success, custom_id="auth_photo_yes")
+    @discord.ui.button(label="✅ 네, 인증사진 보냈어요", style=discord.ButtonStyle.success, custom_id="auth_photo_yes")
     async def photo_yes(self, interaction: discord.Interaction, button: discord.ui.Button):
         auth_flow_data[interaction.user.id] = {"method": "DM"}
         view = AuthServerSelectView()
