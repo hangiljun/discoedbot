@@ -182,22 +182,9 @@ class AuthPhotoCheckView(discord.ui.View):
     async def photo_no(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.user.send(
-                "🍁 **메이플 디스코드 입장 안내** (사진 참고)\n\n"
-                "```\n"
-                "1. 인증 멘트 입력\n"
-                '   "00시 00분 메이플 디스코드 인증" 채팅 치고\n\n'
-                "2. 메이플 사진 캡처 후 <사진 참조> 내용을 참고하여\n"
-                "   관리자 DM으로 문의해 주세요.\n\n"
-                "3. 인증 신청 버튼을 눌러주세요!\n"
-                "```\n"
-                "```\n"
-                "주의사항\n"
-                "- 복귀 유저는 육성 후 인증 신청 부탁드립니다. (레벨변동확인)\n"
-                "- 아이템 판매 후 메소만 판매하시는 분은 경매장 판매\n"
-                "  내역 사진을 함께 첨부해 주세요.\n"
-                "```\n\n"
-                "🍁\n"
-                "━ 관리자 DM 문의 : @maplestory_manager"
+                "🍁 **메이플 디스코드 입장 안내**\n\n"
+                "인증 사진을 보내시지 않으셔서 재 안내 드립니다.\n\n"
+                "인증 채널을 참고 해서 사진을 꼭 먼저 보내주세요"
             )
         except discord.Forbidden:
             pass
