@@ -164,6 +164,49 @@ def remove_auth_pending(request_id: str):
     save_auth_pending(pending)
 
 
+# ========== 인증 - 사진 전송 여부 확인 ==========
+class AuthPhotoCheckView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+
+    @discord.ui.button(label="✅ 네, DM으로 보냈어요", style=discord.ButtonStyle.success, custom_id="auth_photo_yes")
+    async def photo_yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        auth_flow_data[interaction.user.id] = {"method": "DM"}
+        view = AuthServerSelectView()
+        await interaction.response.edit_message(
+            content="📋 메이플 서버를 선택해주세요:",
+            view=view
+        )
+
+    @discord.ui.button(label="❌ 아니요, 아직 안보냈어요", style=discord.ButtonStyle.secondary, custom_id="auth_photo_no")
+    async def photo_no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            await interaction.user.send(
+                "🍁 **메이플 디스코드 입장 안내** (사진 참고)\n\n"
+                "```\n"
+                "1. 인증 멘트 입력\n"
+                '   "00시 00분 메이플 디스코드 인증" 채팅 치고\n\n'
+                "2. 메이플 사진 캡처 후 <사진 참조> 내용을 참고하여\n"
+                "   관리자 DM으로 문의해 주세요.\n\n"
+                "3. 인증 신청 버튼을 눌러주세요!\n"
+                "```\n"
+                "```\n"
+                "주의사항\n"
+                "- 복귀 유저는 육성 후 인증 신청 부탁드립니다. (레벨변동확인)\n"
+                "- 아이템 판매 후 메소만 판매하시는 분은 경매장 판매\n"
+                "  내역 사진을 함께 첨부해 주세요.\n"
+                "```\n\n"
+                "🍁\n"
+                "━ 관리자 DM 문의 : @maplestory_manager"
+            )
+        except discord.Forbidden:
+            pass
+        await interaction.response.edit_message(
+            content="📨 인증 안내 DM을 발송했습니다.\n인증 사진 전송 후 다시 인증 신청 버튼을 눌러주세요!",
+            view=None
+        )
+
+
 # ========== 인증 - 서버 선택 드롭다운 ==========
 class AuthServerSelectView(discord.ui.View):
     def __init__(self):
@@ -175,30 +218,8 @@ class AuthServerSelectView(discord.ui.View):
         options=[discord.SelectOption(label=s, value=s) for s in AUTH_SERVER_LIST]
     )
     async def server_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        auth_flow_data[interaction.user.id] = {"server": select.values[0]}
-        view = AuthPhotoMethodView()
-        await interaction.response.edit_message(
-            content=f"✅ 서버: **{select.values[0]}**\n\n📸 인증 사진을 어디로 보내셨나요?",
-            view=view
-        )
-
-
-# ========== 인증 - DM/카톡 선택 ==========
-class AuthPhotoMethodView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=300)
-
-    @discord.ui.button(label="💬 DM", style=discord.ButtonStyle.primary, custom_id="auth_method_dm")
-    async def dm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         data = auth_flow_data.get(interaction.user.id, {})
-        data["method"] = "DM"
-        auth_flow_data[interaction.user.id] = data
-        await interaction.response.send_modal(AuthModal())
-
-    @discord.ui.button(label="🟡 카카오톡", style=discord.ButtonStyle.secondary, custom_id="auth_method_kakao")
-    async def kakao_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = auth_flow_data.get(interaction.user.id, {})
-        data["method"] = "카카오톡"
+        data["server"] = select.values[0]
         auth_flow_data[interaction.user.id] = data
         await interaction.response.send_modal(AuthModal())
 
@@ -230,9 +251,9 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
 
         data = auth_flow_data.get(interaction.user.id, {})
         server = data.get("server")
-        method = data.get("method")
+        method = data.get("method", "DM")
 
-        if not server or not method:
+        if not server:
             await interaction.response.send_message("❌ 처음부터 다시 신청해주세요.", ephemeral=True)
             return
 
@@ -469,9 +490,9 @@ class AuthButtonView(discord.ui.View):
 
     @discord.ui.button(label="🔐 인증 신청", style=discord.ButtonStyle.success, custom_id="auth_request")
     async def auth_request(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = AuthServerSelectView()
+        view = AuthPhotoCheckView()
         await interaction.response.send_message(
-            "📋 메이플 서버를 선택해주세요:",
+            "📸 인증 사진을 보내셨나요?",
             view=view,
             ephemeral=True
         )
