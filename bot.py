@@ -50,6 +50,10 @@ AUTH_SERVER_LIST = [
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
 nick_flow_data = {}  # user_id -> {"server": str}
 
+# 일일 입장/퇴장 카운터 (KST 기준)
+daily_join_count = 0
+daily_leave_count = 0
+
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -617,6 +621,8 @@ async def on_message(message: discord.Message):
 # ========== 1. 신규 계정 입장 감지 ==========
 @bot.event
 async def on_member_join(member: discord.Member):
+    global daily_join_count
+    daily_join_count += 1
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
 
@@ -654,6 +660,37 @@ async def on_member_join(member: discord.Member):
                 )
             except discord.Forbidden:
                 pass
+
+
+# ========== 퇴장 감지 ==========
+@bot.event
+async def on_member_remove(member: discord.Member):
+    global daily_leave_count
+    daily_leave_count += 1
+
+
+# ========== 일일 요약 (매일 자정 KST) ==========
+async def daily_summary_task():
+    global daily_join_count, daily_leave_count
+    KST = timezone(timedelta(hours=9))
+    while True:
+        now = datetime.now(KST)
+        next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        await asyncio.sleep((next_midnight - now).total_seconds())
+
+        join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
+        if join_log_channel:
+            date_str = now.strftime("%Y-%m-%d")
+            try:
+                await join_log_channel.send(
+                    f"📊 **{date_str} 일일 요약**\n"
+                    f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명"
+                )
+            except discord.Forbidden:
+                pass
+
+        daily_join_count = 0
+        daily_leave_count = 0
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
@@ -1293,6 +1330,7 @@ async def on_ready():
             reason=r.get("reason", "")
         ))
 
+    asyncio.create_task(daily_summary_task())
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
