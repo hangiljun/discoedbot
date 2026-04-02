@@ -300,10 +300,17 @@ class AuthApproveView(discord.ui.View):
             style=discord.ButtonStyle.danger,
             custom_id=f"auth_reject_{request_id}"
         )
+        no_photo_btn = discord.ui.Button(
+            label="📷 인증사진 미첨부",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"auth_no_photo_{request_id}"
+        )
         approve_btn.callback = self.approve
         reject_btn.callback = self.reject
+        no_photo_btn.callback = self.no_photo
         self.add_item(approve_btn)
         self.add_item(reject_btn)
+        self.add_item(no_photo_btn)
 
         if is_underage:
             underage_btn = discord.ui.Button(
@@ -468,6 +475,38 @@ class AuthApproveView(discord.ui.View):
             pass
         await interaction.message.edit(view=self)
         await interaction.channel.send("⚠️ 30일 미만 계정 안내 DM 발송 완료")
+
+    async def no_photo(self, interaction: discord.Interaction):
+        pending = load_auth_pending()
+        data = pending.get(self.request_id)
+        if not data:
+            data = self._parse_message(interaction.message.content)
+
+        member = None
+        if data:
+            member = interaction.guild.get_member(data["user_id"])
+
+        if member:
+            try:
+                await member.send(
+                    "**1. 인증 사진이 관리자 DM으로 오지 않았습니다.**\n"
+                    "인증 채널 참고후 인증 사진을 디스코드 채널 관리자에게 보내주세요\n\n"
+                    "저는 봇 이라서 저에게 보내시면 안됩니다\n\n"
+                    "두곳중 한곳에 인증 사진을 보내주시면 됩니다.\n\n"
+                    "- 메이플 디스코드 채널 오른쪽 상단에 있는 **[MS.D] - 관리자** 에게 보내주세요.\n"
+                    "- 인증채널 dm 관리자 문의 옆에 **[MS.D] - 관리자** 에게 보내시면 됩니다"
+                )
+            except discord.Forbidden:
+                pass
+
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
+        await interaction.message.edit(view=self)
+        await interaction.channel.send("📷 인증사진 미첨부 안내 DM 발송 완료")
 
 
 # ========== 인증 버튼 패널 ==========
