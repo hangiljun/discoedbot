@@ -623,10 +623,10 @@ async def on_member_join(member: discord.Member):
     # 전체 입장 로그
     join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
     if join_log_channel:
-        label = "🚨 30일 미만 계정" if days < 30 else "👋 신규 입장"
+        label = "🚨 30일 미만 계정" if days < 30 else ""
         try:
             await join_log_channel.send(
-                f"{label} {member.mention} (`{member}`) · 계정 {days}일"
+                f"{label} {member.mention} (`{member}`) · 계정 {days}일".strip()
             )
         except discord.Forbidden:
             pass
