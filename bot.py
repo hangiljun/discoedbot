@@ -14,6 +14,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 AUTH_ADMIN_CHANNEL_ID = int(os.getenv("AUTH_ADMIN_CHANNEL_ID", "1483398777904828416"))
+JOIN_LOG_CHANNEL_ID = int(os.getenv("JOIN_LOG_CHANNEL_ID", "0"))
 HISTORY_FILE = "/data/nickname_history.json"
 PENDING_FILE = "/data/pending_approvals.json"
 WEEKLY_LIMIT = 1
@@ -618,6 +619,19 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
+
+    # 전체 입장 로그
+    join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
+    if join_log_channel:
+        label = "🚨 30일 미만 계정" if days < 30 else "👋 신규 입장"
+        try:
+            await join_log_channel.send(
+                f"{label}\n"
+                f"**유저:** {member.mention} (`{member}`)\n"
+                f"**계정 생성:** {member.created_at.strftime('%Y-%m-%d')} ({days}일)"
+            )
+        except discord.Forbidden:
+            pass
 
     if days < 30:
         try:
