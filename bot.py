@@ -626,9 +626,7 @@ async def on_member_join(member: discord.Member):
         label = "🚨 30일 미만 계정" if days < 30 else "👋 신규 입장"
         try:
             await join_log_channel.send(
-                f"{label}\n"
-                f"**유저:** {member.mention} (`{member}`)\n"
-                f"**계정 생성:** {member.created_at.strftime('%Y-%m-%d')} ({days}일)"
+                f"{label} {member.mention} (`{member}`) · 계정 {days}일"
             )
         except discord.Forbidden:
             pass
