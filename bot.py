@@ -504,8 +504,10 @@ class AuthApproveView(discord.ui.View):
             except discord.Forbidden:
                 pass
 
+        # 인증사진 미첨부 버튼만 비활성화, 승인/거절은 유지
         for child in self.children:
-            child.disabled = True
+            if hasattr(child, 'custom_id') and child.custom_id == f"auth_no_photo_{self.request_id}":
+                child.disabled = True
         try:
             await interaction.response.defer()
         except Exception:
