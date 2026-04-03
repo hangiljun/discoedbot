@@ -53,6 +53,9 @@ nick_flow_data = {}  # user_id -> {"server": str}
 # 일일 입장/퇴장 카운터 (KST 기준)
 daily_join_count = 0
 daily_leave_count = 0
+daily_leave_has_role = 0    # 역할 있던 유저
+daily_leave_no_role = 0     # 역할 없던 유저 (미인증)
+daily_leave_underage = 0    # 30일 미만 계정
 
 intents = discord.Intents.default()
 intents.members = True
@@ -667,13 +670,23 @@ async def on_member_join(member: discord.Member):
 # ========== 퇴장 감지 ==========
 @bot.event
 async def on_member_remove(member: discord.Member):
-    global daily_leave_count
+    global daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage
     daily_leave_count += 1
+
+    days = (datetime.now(timezone.utc) - member.created_at).days
+    has_real_role = any(r.name != "@everyone" for r in member.roles)
+
+    if days < 30:
+        daily_leave_underage += 1
+    elif has_real_role:
+        daily_leave_has_role += 1
+    else:
+        daily_leave_no_role += 1
 
 
 # ========== 일일 요약 (매일 자정 KST) ==========
 async def daily_summary_task():
-    global daily_join_count, daily_leave_count
+    global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
@@ -686,13 +699,20 @@ async def daily_summary_task():
             try:
                 await join_log_channel.send(
                     f"📊 **{date_str} 일일 요약**\n"
-                    f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명"
+                    f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명\n\n"
+                    f"**퇴장 분석**\n"
+                    f"├ 인증 역할 있던 유저: {daily_leave_has_role}명\n"
+                    f"├ 역할 없던 유저 (미인증): {daily_leave_no_role}명\n"
+                    f"└ 30일 미만 계정: {daily_leave_underage}명"
                 )
             except discord.Forbidden:
                 pass
 
         daily_join_count = 0
         daily_leave_count = 0
+        daily_leave_has_role = 0
+        daily_leave_no_role = 0
+        daily_leave_underage = 0
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
