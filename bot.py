@@ -56,6 +56,8 @@ daily_leave_count = 0
 daily_leave_has_role = 0    # 역할 있던 유저
 daily_leave_no_role = 0     # 역할 없던 유저 (미인증)
 daily_leave_underage = 0    # 30일 미만 계정
+daily_auth_approve = 0      # 인증 승인 건수
+daily_auth_reject = 0       # 인증 거절 건수
 
 intents = discord.Intents.default()
 intents.members = True
@@ -345,6 +347,8 @@ class AuthApproveView(discord.ui.View):
         }
 
     async def approve(self, interaction: discord.Interaction):
+        global daily_auth_approve
+        daily_auth_approve += 1
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
@@ -405,6 +409,8 @@ class AuthApproveView(discord.ui.View):
         )
 
     async def reject(self, interaction: discord.Interaction):
+        global daily_auth_reject
+        daily_auth_reject += 1
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
@@ -686,7 +692,7 @@ async def on_member_remove(member: discord.Member):
 
 # ========== 일일 요약 (매일 자정 KST) ==========
 async def daily_summary_task():
-    global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage
+    global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
@@ -703,7 +709,10 @@ async def daily_summary_task():
                     f"**퇴장 분석**\n"
                     f"├ 인증 역할 있던 유저: {daily_leave_has_role}명\n"
                     f"├ 역할 없던 유저 (미인증): {daily_leave_no_role}명\n"
-                    f"└ 30일 미만 계정: {daily_leave_underage}명"
+                    f"└ 30일 미만 계정: {daily_leave_underage}명\n\n"
+                    f"**인증 처리**\n"
+                    f"├ 승인: {daily_auth_approve}건\n"
+                    f"└ 거절: {daily_auth_reject}건"
                 )
             except discord.Forbidden:
                 pass
@@ -713,6 +722,8 @@ async def daily_summary_task():
         daily_leave_has_role = 0
         daily_leave_no_role = 0
         daily_leave_underage = 0
+        daily_auth_approve = 0
+        daily_auth_reject = 0
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
