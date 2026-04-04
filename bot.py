@@ -277,6 +277,13 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
         view = AuthApproveView(request_id=request_id, is_underage=is_underage)
         bot.add_view(view)
 
+        auth_flow_data.pop(interaction.user.id, None)
+
+        await interaction.response.send_message(
+            "✅ 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
+            ephemeral=True
+        )
+
         await admin_channel.send(
             f"🔐 **인증 신청**\n"
             f"신청자: {interaction.user.mention}\n"
@@ -284,13 +291,6 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
             f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`\n"
             f"사진 전송 방법: **{method}**",
             view=view
-        )
-
-        auth_flow_data.pop(interaction.user.id, None)
-
-        await interaction.response.send_message(
-            "✅ 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
-            ephemeral=True
         )
 
 
@@ -362,6 +362,9 @@ class AuthApproveView(discord.ui.View):
             await interaction.channel.send("❌ 유저를 찾을 수 없습니다.")
             return
 
+        if not all(k in data for k in ("server", "level", "nickname")):
+            await interaction.channel.send("❌ 신청 데이터가 불완전합니다. 다시 신청해주세요.")
+            return
         combined_nick = f"{data['server']}/{data['level']}/{data['nickname']}"
 
         try:
@@ -699,9 +702,10 @@ async def daily_summary_task():
         next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         await asyncio.sleep((next_midnight - now).total_seconds())
 
+        summary_date = datetime.now(KST) - timedelta(days=1)  # 방금 지난 날짜
         join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
         if join_log_channel:
-            date_str = now.strftime("%Y-%m-%d")
+            date_str = summary_date.strftime("%Y-%m-%d")
             try:
                 await join_log_channel.send(
                     f"📊 **{date_str} 일일 요약**\n"
