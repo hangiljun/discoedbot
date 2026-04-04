@@ -20,6 +20,7 @@ PENDING_FILE = "/data/pending_approvals.json"
 WEEKLY_LIMIT = 1
 AUTH_PENDING_FILE = "/data/auth_pending.json"
 HANDS_AUTH_ROLE = "「핸즈 & 인증유저」"
+JOIN_TRACKER_FILE = "/data/join_tracker.json"
 # ==========================
 
 # 서버명 → 역할명 매핑
@@ -99,6 +100,18 @@ def record_change(user_id: str, previous: str, new: str):
         "new": new
     })
     save_history(history)
+
+def load_join_tracker() -> dict:
+    ensure_data_dir()
+    if os.path.exists(JOIN_TRACKER_FILE):
+        with open(JOIN_TRACKER_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_join_tracker(data: dict):
+    ensure_data_dir()
+    with open(JOIN_TRACKER_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def load_pending() -> dict:
     ensure_data_dir()
@@ -647,6 +660,14 @@ async def on_member_join(member: discord.Member):
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
 
+    # 인증 리마인더 트래커 등록
+    tracker = load_join_tracker()
+    tracker[str(member.id)] = {
+        "join_date": now.isoformat(),
+        "reminders_sent": 0
+    }
+    save_join_tracker(tracker)
+
     # 웰컴 DM
     try:
         await member.send(
@@ -715,6 +736,97 @@ async def on_member_remove(member: discord.Member):
         daily_leave_has_role += 1
     else:
         daily_leave_no_role += 1
+
+    # 트래커에서 제거
+    tracker = load_join_tracker()
+    tracker.pop(str(member.id), None)
+    save_join_tracker(tracker)
+
+
+# ========== 인증 완료 시 트래커 제거 ==========
+@bot.event
+async def on_member_update(before: discord.Member, after: discord.Member):
+    if len(before.roles) < len(after.roles):  # 역할이 추가됨
+        tracker = load_join_tracker()
+        if str(after.id) in tracker:
+            tracker.pop(str(after.id))
+            save_join_tracker(tracker)
+
+
+# ========== 인증 리마인더 태스크 ==========
+REMINDER_SCHEDULE = [
+    (3, (
+        "🍁 아직 인증을 완료하지 않으셨네요!\n\n"
+        "인증만 하면 숨겨진 채널들이 전부 열려요 🔓\n\n"
+        "📌 인증 안내 채널에서 간단하게 신청할 수 있어요!"
+    )),
+    (7, (
+        "👋 메이플 디스코드 아직 둘러보지 못하셨나요?\n\n"
+        "인증하면 이런 채널들이 열려요!\n\n"
+        "💬 메이플 유저들과 자유로운 소통\n"
+        "🛒 서버별 안전한 거래 채널\n"
+        "📢 이벤트 & 업데이트 알림\n"
+        "🎯 해방작업 & 직업별 정보 공유\n\n"
+        "📌 지금 바로 인증 안내 채널에서 신청해보세요!"
+    )),
+    (15, (
+        "🍁 아직 저희와 함께하지 않으셨네요 😊\n\n"
+        "메이플 유저라면 꼭 알아야 할 정보들이\n"
+        "매일 올라오고 있어요!\n\n"
+        "지금 인증하면 놓쳤던 정보들을 바로 확인할 수 있어요 📋\n"
+        "📌 인증 안내 채널에서 신청해주세요!"
+    )),
+    (30, (
+        "🎉 이번 달 메이플 이벤트 놓치고 계신 거 알고 계세요?\n\n"
+        "인증 유저들은 지금 이런 정보들을 공유하고 있어요!\n"
+        "📢 최신 업데이트 & 이벤트 정보\n"
+        "🛒 안전한 거래 채널\n"
+        "🎯 해방작업 & 직업별 공략\n\n"
+        "한 번만 인증하면 전부 볼 수 있어요 😊\n"
+        "📌 인증 안내 채널에서 지금 신청해보세요!"
+    )),
+]
+
+async def reminder_task():
+    KST = timezone(timedelta(hours=9))
+    while True:
+        now = datetime.now(timezone.utc)
+        next_check = (datetime.now(KST) + timedelta(days=1)).replace(hour=1, minute=0, second=0, microsecond=0)
+        await asyncio.sleep((next_check.astimezone(timezone.utc) - now).total_seconds())
+
+        tracker = load_join_tracker()
+        to_remove = []
+        now = datetime.now(timezone.utc)
+
+        for user_id, info in list(tracker.items()):
+            join_date = datetime.fromisoformat(info["join_date"])
+            days_since = (now - join_date).days
+            sent = info["reminders_sent"]
+
+            if sent >= len(REMINDER_SCHEDULE):
+                to_remove.append(user_id)
+                continue
+
+            required_days, message = REMINDER_SCHEDULE[sent]
+            if days_since >= required_days:
+                for guild in bot.guilds:
+                    member = guild.get_member(int(user_id))
+                    if member:
+                        has_role = any(r.name != "@everyone" for r in member.roles)
+                        if has_role:
+                            to_remove.append(user_id)
+                            break
+                        try:
+                            await member.send(message)
+                            info["reminders_sent"] += 1
+                        except discord.Forbidden:
+                            pass
+                        break
+
+        for uid in to_remove:
+            tracker.pop(uid, None)
+
+        save_join_tracker(tracker)
 
 
 # ========== 일일 요약 (매일 자정 KST) ==========
@@ -1392,6 +1504,7 @@ async def on_ready():
         ))
 
     asyncio.create_task(daily_summary_task())
+    asyncio.create_task(reminder_task())
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
