@@ -39,12 +39,13 @@ SERVER_ROLES = {
     "아케인": "아케인",
     "노바": "노바",
     "헬리오스": "에오스/헬리오스",
+    "메이플랜드": "메이플랜드",
 }
 
 AUTH_SERVER_LIST = [
     "챌린저스", "스카니아", "베라", "루나", "엘리시움", "크로아",
     "유니온", "이노시스", "레드", "오로라", "아케인",
-    "노바", "에오스", "헬리오스", "제니스"
+    "노바", "에오스", "헬리오스", "제니스", "메이플랜드"
 ]
 
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
@@ -376,13 +377,14 @@ class AuthApproveView(discord.ui.View):
         # 서버 역할 부여
         await update_server_role(member, data["server"])
 
-        # 핸즈 & 인증유저 역할 부여
-        auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
-        if auth_role:
-            try:
-                await member.add_roles(auth_role)
-            except discord.Forbidden:
-                pass
+        # 메이플랜드는 서버 역할만 부여, 인증유저 역할 제외
+        if data["server"] != "메이플랜드":
+            auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
+            if auth_role:
+                try:
+                    await member.add_roles(auth_role)
+                except discord.Forbidden:
+                    pass
 
         remove_auth_pending(self.request_id)
 
