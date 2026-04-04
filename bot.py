@@ -60,6 +60,7 @@ daily_leave_no_role = 0     # 역할 없던 유저 (미인증)
 daily_leave_underage = 0    # 30일 미만 계정
 daily_auth_approve = 0      # 인증 승인 건수
 daily_auth_reject = 0       # 인증 거절 건수
+daily_bot_dm_count = 0      # 봇 DM 수신 건수
 
 intents = discord.Intents.default()
 intents.members = True
@@ -629,6 +630,8 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
+        global daily_bot_dm_count
+        daily_bot_dm_count += 1
         await message.channel.send(
             "안녕하세요! 저는 메이플 디스코드 자동화 봇이에요 🤖\n"
             "저와는 직접 대화가 어려운 점 양해 부탁드려요 🙏\n\n"
@@ -838,7 +841,7 @@ async def reminder_task():
 
 # ========== 일일 요약 (매일 자정 KST) ==========
 async def daily_summary_task():
-    global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject
+    global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject, daily_bot_dm_count
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
@@ -852,7 +855,8 @@ async def daily_summary_task():
             try:
                 await join_log_channel.send(
                     f"📊 **{date_str} 일일 요약**\n"
-                    f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명\n\n"
+                    f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명\n"
+                    f"🤖 봇 DM 수신: {daily_bot_dm_count}건\n\n"
                     f"**퇴장 분석**\n"
                     f"├ 인증 역할 있던 유저: {daily_leave_has_role}명\n"
                     f"├ 역할 없던 유저 (미인증): {daily_leave_no_role}명\n"
@@ -871,6 +875,7 @@ async def daily_summary_task():
         daily_leave_underage = 0
         daily_auth_approve = 0
         daily_auth_reject = 0
+        daily_bot_dm_count = 0
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
