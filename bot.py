@@ -648,7 +648,7 @@ async def on_member_join(member: discord.Member):
     # 웰컴 DM
     try:
         await member.send(
-            "🍁 메이플스토리 디스코드에 오신 걸 환영합니다!\n\n"
+            "# 🍁메이플스토리 디스코드에 오신 걸 환영합니다!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "🔒 현재는 인증 전 제한 상태입니다\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
