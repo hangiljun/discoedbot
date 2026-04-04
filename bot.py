@@ -615,9 +615,14 @@ async def on_message(message: discord.Message):
         return
     if isinstance(message.channel, discord.DMChannel):
         await message.channel.send(
-            "안녕하세요! 저는 메이플 디스코드 민원 업무를 담당하고 있습니다.\n"
-            "제가 자동 민원만 처리 해드리고 개인적인 문제는\n"
-            "채널 내 우측 상단 메이플 디스코드 관리자에게 DM을 보내주세요."
+            "안녕하세요! 저는 메이플 디스코드 자동화 봇이에요 🤖\n"
+            "저와 메시지로는 대화 할 수 없는점 양해 부탁드려요🙏\n\n"
+            "문의내용\n\n"
+            "✅ 인증 신청 → 인증 안내에서 인증신청 버튼을 눌러주세요\n"
+            "✅ 닉네임 변경 → 닉네임 변경 버튼을 눌러주세요\n"
+            "✅ 사기 신고 → 서버의 사기 신고 버튼을 눌러주세요\n\n"
+            "💬서버 인증 및 직접 문의가 필요하시면\n"
+            "서버 내 [MS.D]-관리자 에게 메시지보내주세요 😊"
         )
 
     # 신고 패널 채널(여러 개 가능)에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
@@ -639,6 +644,23 @@ async def on_member_join(member: discord.Member):
     daily_join_count += 1
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
+
+    # 웰컴 DM
+    try:
+        await member.send(
+            "🍁 메이플스토리 디스코드에 오신 걸 환영합니다!\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔒 현재는 인증 전 제한 상태입니다\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "인증을 완료하면 아래 혜택을 누릴 수 있어요!\n\n"
+            "💬 메이플 유저들과 자유로운 소통\n"
+            "🛒 서버별 안전한 거래 채널 이용\n"
+            "📢 이벤트 & 업데이트 알림\n"
+            "🎯 해방작업 & 직업별 정보 공유\n\n"
+            "📌 #인증안내 메뉴에서 신청하세요!"
+        )
+    except discord.Forbidden:
+        pass
 
     # 전체 입장 로그
     join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
