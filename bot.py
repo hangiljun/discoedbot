@@ -690,6 +690,7 @@ async def on_member_join(member: discord.Member):
             "🛒 서버별 안전한 거래 채널\n"
             "📢 이벤트 & 업데이트 알림 채널\n"
             "🎯 해방작업 & 직업별 정보 공유 채널\n\n"
+            "지금 바로 인증해주세요!\n\n"
             "# 인증받는 방법은 인증 안내 채널을 확인 해주세요"
         )
     except discord.Forbidden:
