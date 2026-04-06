@@ -875,7 +875,7 @@ async def affiliate_promo_task():
                     print(f"[AFFILIATE] 권한 없음: {channel_id}")
                 except Exception as e:
                     print(f"[AFFILIATE] 오류 ({channel_id}): {e}")
-        await asyncio.sleep(6 * 60 * 60)  # 6시간
+        await asyncio.sleep(12 * 60 * 60)  # 12시간
 
 
 # ========== 일일 요약 (매일 자정 KST) ==========
