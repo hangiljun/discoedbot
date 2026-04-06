@@ -62,6 +62,16 @@ daily_auth_approve = 0      # 인증 승인 건수
 daily_auth_reject = 0       # 인증 거절 건수
 daily_bot_dm_count = 0      # 봇 DM 수신 건수
 
+# 주간 누적 카운터
+weekly_join_count = 0
+weekly_leave_count = 0
+weekly_leave_has_role = 0
+weekly_leave_no_role = 0
+weekly_leave_underage = 0
+weekly_auth_approve = 0
+weekly_auth_reject = 0
+weekly_bot_dm_count = 0
+
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -881,14 +891,26 @@ async def affiliate_promo_task():
 # ========== 일일 요약 (매일 자정 KST) ==========
 async def daily_summary_task():
     global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject, daily_bot_dm_count
+    global weekly_join_count, weekly_leave_count, weekly_leave_has_role, weekly_leave_no_role, weekly_leave_underage, weekly_auth_approve, weekly_auth_reject, weekly_bot_dm_count
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
         next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         await asyncio.sleep((next_midnight - now).total_seconds())
 
-        summary_date = datetime.now(KST) - timedelta(days=1)  # 방금 지난 날짜
+        summary_date = datetime.now(KST) - timedelta(days=1)
         join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
+
+        # 주간 카운터 누적
+        weekly_join_count += daily_join_count
+        weekly_leave_count += daily_leave_count
+        weekly_leave_has_role += daily_leave_has_role
+        weekly_leave_no_role += daily_leave_no_role
+        weekly_leave_underage += daily_leave_underage
+        weekly_auth_approve += daily_auth_approve
+        weekly_auth_reject += daily_auth_reject
+        weekly_bot_dm_count += daily_bot_dm_count
+
         if join_log_channel:
             date_str = summary_date.strftime("%Y-%m-%d")
             try:
@@ -906,6 +928,34 @@ async def daily_summary_task():
                 )
             except discord.Forbidden:
                 pass
+
+            # 일요일(weekday=6) 자정이면 주간 요약 발송
+            if summary_date.weekday() == 6:
+                week_start = (summary_date - timedelta(days=6)).strftime("%Y-%m-%d")
+                week_end = summary_date.strftime("%Y-%m-%d")
+                try:
+                    await join_log_channel.send(
+                        f"📅 **주간 요약 ({week_start} ~ {week_end})**\n"
+                        f"👋 입장: {weekly_join_count}명 · 퇴장: {weekly_leave_count}명\n"
+                        f"🤖 봇 DM 수신: {weekly_bot_dm_count}건\n\n"
+                        f"**퇴장 분석**\n"
+                        f"├ 인증 역할 있던 유저: {weekly_leave_has_role}명\n"
+                        f"├ 역할 없던 유저 (미인증): {weekly_leave_no_role}명\n"
+                        f"└ 30일 미만 계정: {weekly_leave_underage}명\n\n"
+                        f"**인증 처리**\n"
+                        f"├ 승인: {weekly_auth_approve}건\n"
+                        f"└ 거절: {weekly_auth_reject}건"
+                    )
+                except discord.Forbidden:
+                    pass
+                weekly_join_count = 0
+                weekly_leave_count = 0
+                weekly_leave_has_role = 0
+                weekly_leave_no_role = 0
+                weekly_leave_underage = 0
+                weekly_auth_approve = 0
+                weekly_auth_reject = 0
+                weekly_bot_dm_count = 0
 
         daily_join_count = 0
         daily_leave_count = 0
