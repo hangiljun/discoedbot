@@ -840,6 +840,44 @@ async def reminder_task():
         save_join_tracker(tracker)
 
 
+# ========== 제휴 홍보 자동 게시 (6시간마다) ==========
+AFFILIATE_CHANNEL_IDS = [
+    1118494847179960340,  # 챌린저스
+    1082016291617001502,  # 루나
+    1082016795310956675,  # 스카니아
+    1082016810901196890,  # 엘리시움
+    1082017109690830969,  # 크로아
+    1082017206755410062,  # 베라
+    1082134678162649118,  # 오로라
+    1082017256583737405,  # 기타서버
+    1082017648860221540,  # 에오스
+    1083767692323979334,  # 헬리오스
+]
+
+AFFILIATE_MESSAGE = (
+    "🍁 메이플스토리 디스코드 - 제휴\n\n"
+    "💶 MVP 작업 / 매달 이벤트 진행 #┏🏆︱mvp작업\n"
+    "🍁 급처 문의 (메소 & 아이템 거래) #┃🍁︱급처문의\n"
+    "✅ 안전거래 사이트 #┃✅︱안전거래\n"
+    "💻 PC방 대행 (시간 이벤트) #┃💻︱피방대행\n"
+    "⚔️ 보스 대행 전문팀 #┗⚔️︱보스대행"
+)
+
+async def affiliate_promo_task():
+    await asyncio.sleep(10)  # 봇 준비 후 10초 대기
+    while True:
+        for channel_id in AFFILIATE_CHANNEL_IDS:
+            channel = bot.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.send(AFFILIATE_MESSAGE)
+                except discord.Forbidden:
+                    print(f"[AFFILIATE] 권한 없음: {channel_id}")
+                except Exception as e:
+                    print(f"[AFFILIATE] 오류 ({channel_id}): {e}")
+        await asyncio.sleep(6 * 60 * 60)  # 6시간
+
+
 # ========== 일일 요약 (매일 자정 KST) ==========
 async def daily_summary_task():
     global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject, daily_bot_dm_count
@@ -1518,6 +1556,7 @@ async def on_ready():
 
     asyncio.create_task(daily_summary_task())
     asyncio.create_task(reminder_task())
+    asyncio.create_task(affiliate_promo_task())
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
