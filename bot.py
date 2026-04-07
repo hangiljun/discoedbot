@@ -21,6 +21,7 @@ WEEKLY_LIMIT = 1
 AUTH_PENDING_FILE = "/data/auth_pending.json"
 HANDS_AUTH_ROLE = "「핸즈 & 인증유저」"
 JOIN_TRACKER_FILE = "/data/join_tracker.json"
+DAILY_STATS_FILE = "/data/daily_stats.json"
 # ==========================
 
 # 서버명 → 역할명 매핑
@@ -52,25 +53,33 @@ AUTH_SERVER_LIST = [
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
 nick_flow_data = {}  # user_id -> {"server": str}
 
-# 일일 입장/퇴장 카운터 (KST 기준)
-daily_join_count = 0
-daily_leave_count = 0
-daily_leave_has_role = 0    # 역할 있던 유저
-daily_leave_no_role = 0     # 역할 없던 유저 (미인증)
-daily_leave_underage = 0    # 30일 미만 계정
-daily_auth_approve = 0      # 인증 승인 건수
-daily_auth_reject = 0       # 인증 거절 건수
-daily_bot_dm_count = 0      # 봇 DM 수신 건수
+# 일일/주간 카운터 (재시작 시 파일에서 복원)
+_saved_stats = {}
+if os.path.exists("/data/daily_stats.json"):
+    try:
+        with open("/data/daily_stats.json", "r", encoding="utf-8") as _f:
+            _saved_stats = json.load(_f)
+    except Exception:
+        pass
+
+daily_join_count = _saved_stats.get("daily_join_count", 0)
+daily_leave_count = _saved_stats.get("daily_leave_count", 0)
+daily_leave_has_role = _saved_stats.get("daily_leave_has_role", 0)    # 역할 있던 유저
+daily_leave_no_role = _saved_stats.get("daily_leave_no_role", 0)      # 역할 없던 유저 (미인증)
+daily_leave_underage = _saved_stats.get("daily_leave_underage", 0)    # 30일 미만 계정
+daily_auth_approve = _saved_stats.get("daily_auth_approve", 0)        # 인증 승인 건수
+daily_auth_reject = _saved_stats.get("daily_auth_reject", 0)          # 인증 거절 건수
+daily_bot_dm_count = _saved_stats.get("daily_bot_dm_count", 0)        # 봇 DM 수신 건수
 
 # 주간 누적 카운터
-weekly_join_count = 0
-weekly_leave_count = 0
-weekly_leave_has_role = 0
-weekly_leave_no_role = 0
-weekly_leave_underage = 0
-weekly_auth_approve = 0
-weekly_auth_reject = 0
-weekly_bot_dm_count = 0
+weekly_join_count = _saved_stats.get("weekly_join_count", 0)
+weekly_leave_count = _saved_stats.get("weekly_leave_count", 0)
+weekly_leave_has_role = _saved_stats.get("weekly_leave_has_role", 0)
+weekly_leave_no_role = _saved_stats.get("weekly_leave_no_role", 0)
+weekly_leave_underage = _saved_stats.get("weekly_leave_underage", 0)
+weekly_auth_approve = _saved_stats.get("weekly_auth_approve", 0)
+weekly_auth_reject = _saved_stats.get("weekly_auth_reject", 0)
+weekly_bot_dm_count = _saved_stats.get("weekly_bot_dm_count", 0)
 
 intents = discord.Intents.default()
 intents.members = True
@@ -122,6 +131,36 @@ def load_join_tracker() -> dict:
 def save_join_tracker(data: dict):
     ensure_data_dir()
     with open(JOIN_TRACKER_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_daily_stats() -> dict:
+    ensure_data_dir()
+    if os.path.exists(DAILY_STATS_FILE):
+        with open(DAILY_STATS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_daily_stats():
+    ensure_data_dir()
+    data = {
+        "daily_join_count": daily_join_count,
+        "daily_leave_count": daily_leave_count,
+        "daily_leave_has_role": daily_leave_has_role,
+        "daily_leave_no_role": daily_leave_no_role,
+        "daily_leave_underage": daily_leave_underage,
+        "daily_auth_approve": daily_auth_approve,
+        "daily_auth_reject": daily_auth_reject,
+        "daily_bot_dm_count": daily_bot_dm_count,
+        "weekly_join_count": weekly_join_count,
+        "weekly_leave_count": weekly_leave_count,
+        "weekly_leave_has_role": weekly_leave_has_role,
+        "weekly_leave_no_role": weekly_leave_no_role,
+        "weekly_leave_underage": weekly_leave_underage,
+        "weekly_auth_approve": weekly_auth_approve,
+        "weekly_auth_reject": weekly_auth_reject,
+        "weekly_bot_dm_count": weekly_bot_dm_count,
+    }
+    with open(DAILY_STATS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def load_pending() -> dict:
@@ -374,6 +413,7 @@ class AuthApproveView(discord.ui.View):
     async def approve(self, interaction: discord.Interaction):
         global daily_auth_approve
         daily_auth_approve += 1
+        save_daily_stats()
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
@@ -440,6 +480,7 @@ class AuthApproveView(discord.ui.View):
     async def reject(self, interaction: discord.Interaction):
         global daily_auth_reject
         daily_auth_reject += 1
+        save_daily_stats()
         pending = load_auth_pending()
         data = pending.get(self.request_id)
         if not data:
@@ -642,6 +683,7 @@ async def on_message(message: discord.Message):
     if isinstance(message.channel, discord.DMChannel):
         global daily_bot_dm_count
         daily_bot_dm_count += 1
+        save_daily_stats()
         await message.channel.send(
             "안녕하세요! 저는 메이플 디스코드 자동화 봇이에요 🤖\n"
             "저와는 직접 대화가 어려운 점 양해 부탁드려요 🙏\n\n"
@@ -677,6 +719,7 @@ async def on_message(message: discord.Message):
 async def on_member_join(member: discord.Member):
     global daily_join_count
     daily_join_count += 1
+    save_daily_stats()
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
 
@@ -757,6 +800,7 @@ async def on_member_remove(member: discord.Member):
         daily_leave_has_role += 1
     else:
         daily_leave_no_role += 1
+    save_daily_stats()
 
     # 트래커에서 제거
     tracker = load_join_tracker()
@@ -958,6 +1002,7 @@ async def daily_summary_task():
                 weekly_auth_approve = 0
                 weekly_auth_reject = 0
                 weekly_bot_dm_count = 0
+                save_daily_stats()
 
         daily_join_count = 0
         daily_leave_count = 0
@@ -967,6 +1012,7 @@ async def daily_summary_task():
         daily_auth_approve = 0
         daily_auth_reject = 0
         daily_bot_dm_count = 0
+        save_daily_stats()
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
