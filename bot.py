@@ -86,6 +86,7 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot._tasks_started = False
 
 
 # ========== 신청 기록 관리 ==========
@@ -927,8 +928,18 @@ AFFILIATE_MESSAGE = (
 )
 
 async def affiliate_promo_task():
-    await asyncio.sleep(10)  # 봇 준비 후 10초 대기
+    KST = timezone(timedelta(hours=9))
     while True:
+        now = datetime.now(KST)
+        # 다음 발송 시각 계산 (08:00 또는 20:00)
+        candidates = [
+            now.replace(hour=8, minute=0, second=0, microsecond=0),
+            now.replace(hour=20, minute=0, second=0, microsecond=0),
+        ]
+        next_send = min(t for t in candidates if t > now) if any(t > now for t in candidates) \
+            else now.replace(hour=8, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        await asyncio.sleep((next_send - now).total_seconds())
+
         for channel_id in AFFILIATE_CHANNEL_IDS:
             channel = bot.get_channel(channel_id)
             if channel:
@@ -938,7 +949,6 @@ async def affiliate_promo_task():
                     print(f"[AFFILIATE] 권한 없음: {channel_id}")
                 except Exception as e:
                     print(f"[AFFILIATE] 오류 ({channel_id}): {e}")
-        await asyncio.sleep(12 * 60 * 60)  # 12시간
 
 
 # ========== 일일 요약 (매일 자정 KST) ==========
@@ -1659,9 +1669,11 @@ async def on_ready():
             reason=r.get("reason", "")
         ))
 
-    asyncio.create_task(daily_summary_task())
-    asyncio.create_task(reminder_task())
-    asyncio.create_task(affiliate_promo_task())
+    if not bot._tasks_started:
+        bot._tasks_started = True
+        asyncio.create_task(daily_summary_task())
+        asyncio.create_task(reminder_task())
+        asyncio.create_task(affiliate_promo_task())
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
