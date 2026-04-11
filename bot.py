@@ -22,6 +22,7 @@ AUTH_PENDING_FILE = "/data/auth_pending.json"
 HANDS_AUTH_ROLE = "「핸즈 & 인증유저」"
 JOIN_TRACKER_FILE = "/data/join_tracker.json"
 DAILY_STATS_FILE = "/data/daily_stats.json"
+DAILY_AUTH_LIST_FILE = "/data/daily_auth_list.json"
 # ==========================
 
 # 서버명 → 역할명 매핑 (챌린저스 1~4는 모두 챌린저스 역할)
@@ -84,6 +85,15 @@ weekly_leave_underage = _saved_stats.get("weekly_leave_underage", 0)
 weekly_auth_approve = _saved_stats.get("weekly_auth_approve", 0)
 weekly_auth_reject = _saved_stats.get("weekly_auth_reject", 0)
 weekly_bot_dm_count = _saved_stats.get("weekly_bot_dm_count", 0)
+
+# 당일 핸즈인증 승인 목록 (재시작 시 파일에서 복원)
+daily_auth_list: list[dict] = []  # [{"user_id": int, "nick": str}, ...]
+if os.path.exists(DAILY_AUTH_LIST_FILE):
+    try:
+        with open(DAILY_AUTH_LIST_FILE, "r", encoding="utf-8") as _f:
+            daily_auth_list = json.load(_f)
+    except Exception:
+        pass
 
 intents = discord.Intents.default()
 intents.members = True
@@ -167,6 +177,11 @@ def save_daily_stats():
     }
     with open(DAILY_STATS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def save_daily_auth_list():
+    ensure_data_dir()
+    with open(DAILY_AUTH_LIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(daily_auth_list, f, ensure_ascii=False, indent=2)
 
 def load_pending() -> dict:
     ensure_data_dir()
@@ -416,7 +431,7 @@ class AuthApproveView(discord.ui.View):
         }
 
     async def approve(self, interaction: discord.Interaction):
-        global daily_auth_approve
+        global daily_auth_approve, daily_auth_list
         daily_auth_approve += 1
         save_daily_stats()
         pending = load_auth_pending()
@@ -478,6 +493,8 @@ class AuthApproveView(discord.ui.View):
         except Exception:
             pass
         await interaction.message.edit(view=self)
+        daily_auth_list.append({"user_id": member.id, "nick": combined_nick})
+        save_daily_auth_list()
         await interaction.channel.send(
             f"✅ {member.mention} 인증 완료!\n닉네임: `{combined_nick}` | 역할 부여 완료"
         )
@@ -959,6 +976,7 @@ async def affiliate_promo_task():
 async def daily_summary_task():
     global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject, daily_bot_dm_count
     global weekly_join_count, weekly_leave_count, weekly_leave_has_role, weekly_leave_no_role, weekly_leave_underage, weekly_auth_approve, weekly_auth_reject, weekly_bot_dm_count
+    global daily_auth_list
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
@@ -966,6 +984,7 @@ async def daily_summary_task():
         await asyncio.sleep((next_midnight - now).total_seconds())
 
         summary_date = datetime.now(KST) - timedelta(days=1)
+        date_str = summary_date.strftime("%Y-%m-%d")
         join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
 
         # 주간 카운터 누적
@@ -979,7 +998,6 @@ async def daily_summary_task():
         weekly_bot_dm_count += daily_bot_dm_count
 
         if join_log_channel:
-            date_str = summary_date.strftime("%Y-%m-%d")
             try:
                 await join_log_channel.send(
                     f"📊 **{date_str} 일일 요약**\n"
@@ -1025,6 +1043,32 @@ async def daily_summary_task():
                 weekly_bot_dm_count = 0
                 save_daily_stats()
 
+        # 당일 핸즈인증 승인 목록 → AUTH_ADMIN_CHANNEL_ID 발송
+        auth_admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        if auth_admin_channel:
+            snapshot = list(daily_auth_list)
+            if snapshot:
+                lines = []
+                for entry in snapshot:
+                    guild = auth_admin_channel.guild
+                    member = guild.get_member(entry["user_id"])
+                    mention = member.mention if member else f"<@{entry['user_id']}>"
+                    lines.append(f"신청자: {mention}")
+                body = "\n".join(lines)
+                try:
+                    await auth_admin_channel.send(
+                        f"📋 **{date_str} 핸즈인증 승인 목록** (총 {len(snapshot)}명)\n\n{body}"
+                    )
+                except discord.Forbidden:
+                    pass
+            else:
+                try:
+                    await auth_admin_channel.send(
+                        f"📋 **{date_str} 핸즈인증 승인 목록** — 오늘 승인된 인원이 없습니다."
+                    )
+                except discord.Forbidden:
+                    pass
+
         daily_join_count = 0
         daily_leave_count = 0
         daily_leave_has_role = 0
@@ -1033,7 +1077,9 @@ async def daily_summary_task():
         daily_auth_approve = 0
         daily_auth_reject = 0
         daily_bot_dm_count = 0
+        daily_auth_list = []
         save_daily_stats()
+        save_daily_auth_list()
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
