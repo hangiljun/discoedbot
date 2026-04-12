@@ -719,18 +719,17 @@ async def on_message(message: discord.Message):
         return
     if isinstance(message.channel, discord.DMChannel):
         global daily_bot_dm_count, daily_dm_user_ids
-        is_new_user = message.author.id not in daily_dm_user_ids
-        daily_dm_user_ids.add(message.author.id)
-        save_daily_dm_users()
-        if is_new_user:
+        if message.author.id not in daily_dm_user_ids:
+            daily_dm_user_ids.add(message.author.id)
             daily_bot_dm_count += 1
             save_daily_stats()
-            admin_ch = bot.get_channel(ADMIN_CHANNEL_ID)
-            if admin_ch:
-                try:
-                    await admin_ch.send(f"📨 {message.author.mention} 님이 봇에게 DM을 보냈습니다.")
-                except discord.Forbidden:
-                    pass
+            save_daily_dm_users()
+        admin_ch = bot.get_channel(ADMIN_CHANNEL_ID)
+        if admin_ch:
+            try:
+                await admin_ch.send(f"📨 {message.author.mention} 님이 봇에게 DM을 보냈습니다.")
+            except discord.Forbidden:
+                pass
         await message.channel.send(
             "안녕하세요! 저는 메이플 디스코드 자동화 봇이에요 🤖\n"
             "저와는 직접 대화가 어려운 점 양해 부탁드려요 🙏\n\n"
