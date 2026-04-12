@@ -23,6 +23,7 @@ HANDS_AUTH_ROLE = "「핸즈 & 인증유저」"
 JOIN_TRACKER_FILE = "/data/join_tracker.json"
 DAILY_STATS_FILE = "/data/daily_stats.json"
 DAILY_AUTH_LIST_FILE = "/data/daily_auth_list.json"
+DAILY_DM_USERS_FILE = "/data/daily_dm_users.json"
 # ==========================
 
 # 서버명 → 역할명 매핑 (챌린저스 1~4는 모두 챌린저스 역할)
@@ -74,7 +75,7 @@ daily_leave_no_role = _saved_stats.get("daily_leave_no_role", 0)      # 역할 �
 daily_leave_underage = _saved_stats.get("daily_leave_underage", 0)    # 30일 미만 계정
 daily_auth_approve = _saved_stats.get("daily_auth_approve", 0)        # 인증 승인 건수
 daily_auth_reject = _saved_stats.get("daily_auth_reject", 0)          # 인증 거절 건수
-daily_bot_dm_count = _saved_stats.get("daily_bot_dm_count", 0)        # 봇 DM 수신 건수
+daily_bot_dm_count = _saved_stats.get("daily_bot_dm_count", 0)        # 봇 DM 수신 인원수 (unique)
 
 # 주간 누적 카운터
 weekly_join_count = _saved_stats.get("weekly_join_count", 0)
@@ -92,6 +93,15 @@ if os.path.exists(DAILY_AUTH_LIST_FILE):
     try:
         with open(DAILY_AUTH_LIST_FILE, "r", encoding="utf-8") as _f:
             daily_auth_list = json.load(_f)
+    except Exception:
+        pass
+
+# 당일 DM 수신 유저 (중복 제거, 재시작 시 파일에서 복원)
+daily_dm_user_ids: set[int] = set()
+if os.path.exists(DAILY_DM_USERS_FILE):
+    try:
+        with open(DAILY_DM_USERS_FILE, "r", encoding="utf-8") as _f:
+            daily_dm_user_ids = set(json.load(_f))
     except Exception:
         pass
 
@@ -182,6 +192,11 @@ def save_daily_auth_list():
     ensure_data_dir()
     with open(DAILY_AUTH_LIST_FILE, "w", encoding="utf-8") as f:
         json.dump(daily_auth_list, f, ensure_ascii=False, indent=2)
+
+def save_daily_dm_users():
+    ensure_data_dir()
+    with open(DAILY_DM_USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(list(daily_dm_user_ids), f)
 
 def load_pending() -> dict:
     ensure_data_dir()
@@ -703,9 +718,19 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
-        global daily_bot_dm_count
-        daily_bot_dm_count += 1
-        save_daily_stats()
+        global daily_bot_dm_count, daily_dm_user_ids
+        is_new_user = message.author.id not in daily_dm_user_ids
+        daily_dm_user_ids.add(message.author.id)
+        save_daily_dm_users()
+        if is_new_user:
+            daily_bot_dm_count += 1
+            save_daily_stats()
+            admin_ch = bot.get_channel(ADMIN_CHANNEL_ID)
+            if admin_ch:
+                try:
+                    await admin_ch.send(f"📨 {message.author.mention} 님이 봇에게 DM을 보냈습니다.")
+                except discord.Forbidden:
+                    pass
         await message.channel.send(
             "안녕하세요! 저는 메이플 디스코드 자동화 봇이에요 🤖\n"
             "저와는 직접 대화가 어려운 점 양해 부탁드려요 🙏\n\n"
@@ -977,7 +1002,7 @@ async def affiliate_promo_task():
 async def daily_summary_task():
     global daily_join_count, daily_leave_count, daily_leave_has_role, daily_leave_no_role, daily_leave_underage, daily_auth_approve, daily_auth_reject, daily_bot_dm_count
     global weekly_join_count, weekly_leave_count, weekly_leave_has_role, weekly_leave_no_role, weekly_leave_underage, weekly_auth_approve, weekly_auth_reject, weekly_bot_dm_count
-    global daily_auth_list
+    global daily_auth_list, daily_dm_user_ids
     KST = timezone(timedelta(hours=9))
     while True:
         now = datetime.now(KST)
@@ -1003,7 +1028,7 @@ async def daily_summary_task():
                 await join_log_channel.send(
                     f"📊 **{date_str} 일일 요약**\n"
                     f"👋 입장: {daily_join_count}명 · 퇴장: {daily_leave_count}명\n"
-                    f"🤖 봇 DM 수신: {daily_bot_dm_count}건\n\n"
+                    f"🤖 봇 DM 수신: {daily_bot_dm_count}명\n\n"
                     f"**퇴장 분석**\n"
                     f"├ 인증 역할 있던 유저: {daily_leave_has_role}명\n"
                     f"├ 역할 없던 유저 (미인증): {daily_leave_no_role}명\n"
@@ -1023,7 +1048,7 @@ async def daily_summary_task():
                     await join_log_channel.send(
                         f"📅 **주간 요약 ({week_start} ~ {week_end})**\n"
                         f"👋 입장: {weekly_join_count}명 · 퇴장: {weekly_leave_count}명\n"
-                        f"🤖 봇 DM 수신: {weekly_bot_dm_count}건\n\n"
+                        f"🤖 봇 DM 수신: {weekly_bot_dm_count}명\n\n"
                         f"**퇴장 분석**\n"
                         f"├ 인증 역할 있던 유저: {weekly_leave_has_role}명\n"
                         f"├ 역할 없던 유저 (미인증): {weekly_leave_no_role}명\n"
@@ -1079,8 +1104,10 @@ async def daily_summary_task():
         daily_auth_reject = 0
         daily_bot_dm_count = 0
         daily_auth_list = []
+        daily_dm_user_ids = set()
         save_daily_stats()
         save_daily_auth_list()
+        save_daily_dm_users()
 
 
 # ========== 닉네임 패널 자동 재생성 ==========
