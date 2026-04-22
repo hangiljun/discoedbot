@@ -1718,6 +1718,110 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+# ========== 메이플랜드 역할 버튼 ==========
+MAPLELAND_ROLE_CHANNEL_ID = 1213334715663130645
+MAPLELAND_ROLE_NAME = "메이플랜드"
+MAPLELAND_EMOJI = discord.PartialEmoji(name="maple_land", id=1491089019977859143)
+MAPLELAND_PANEL_FILE = "/data/mapleland_panel.json"
+
+
+def load_mapleland_panel() -> dict:
+    ensure_data_dir()
+    if os.path.exists(MAPLELAND_PANEL_FILE):
+        try:
+            with open(MAPLELAND_PANEL_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_mapleland_panel(data: dict):
+    ensure_data_dir()
+    with open(MAPLELAND_PANEL_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+mapleland_panel_info = load_mapleland_panel()
+
+
+class MaplelandRoleView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="메이플랜드 역할 받기",
+        emoji=MAPLELAND_EMOJI,
+        style=discord.ButtonStyle.primary,
+        custom_id="mapleland_role_toggle"
+    )
+    async def toggle_role(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        member = interaction.user
+        days = (discord.utils.utcnow() - member.created_at).days
+        if days < 30:
+            await interaction.response.send_message(
+                "Discord 가입 후 30일이 지나야 이용 가능합니다.",
+                ephemeral=True
+            )
+            return
+
+        role = discord.utils.get(interaction.guild.roles, name=MAPLELAND_ROLE_NAME)
+        if not role:
+            await interaction.response.send_message("❌ 역할을 찾을 수 없습니다. 관리자에게 문의해주세요.", ephemeral=True)
+            return
+
+        if role in member.roles:
+            await member.remove_roles(role)
+            await interaction.response.send_message("✅ **메이플랜드** 역할이 회수됐습니다.", ephemeral=True)
+        else:
+            await member.add_roles(role)
+            await interaction.response.send_message("✅ **메이플랜드** 역할이 부여됐습니다!", ephemeral=True)
+
+
+@bot.tree.command(name="메이플랜드패널", description="메이플랜드 역할 버튼 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def mapleland_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    channel = bot.get_channel(MAPLELAND_ROLE_CHANNEL_ID)
+    if not channel:
+        await interaction.followup.send("❌ 채널을 찾을 수 없습니다.", ephemeral=True)
+        return
+
+    old_id = mapleland_panel_info.get("message_id")
+    if old_id:
+        try:
+            old_msg = await channel.fetch_message(old_id)
+            await old_msg.delete()
+        except Exception:
+            pass
+
+    embed = discord.Embed(
+        title="<:maple_land:1491089019977859143> 메이플랜드 역할",
+        description=(
+            "버튼을 눌러 **메이플랜드** 역할을 받으세요!\n\n"
+            "• 버튼을 한 번 누르면 역할 **부여**\n"
+            "• 다시 누르면 역할 **회수**\n\n"
+            "⚠️ Discord 가입 후 **30일 이상** 된 계정만 이용 가능합니다."
+        ),
+        color=discord.Color.green()
+    )
+    msg = await channel.send(embed=embed, view=MaplelandRoleView())
+    mapleland_panel_info["message_id"] = msg.id
+    save_mapleland_panel(mapleland_panel_info)
+    await interaction.followup.send("✅ 메이플랜드 역할 패널 생성 완료!", ephemeral=True)
+
+
+@mapleland_panel.error
+async def mapleland_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            pass
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -1726,6 +1830,7 @@ async def on_ready():
     bot.add_view(NicknameButtonView())
     bot.add_view(AuthButtonView())
     bot.add_view(ReportButtonView())
+    bot.add_view(MaplelandRoleView())
 
     pending = load_pending()
     for request_id in pending:
