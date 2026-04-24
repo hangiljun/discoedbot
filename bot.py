@@ -1735,11 +1735,15 @@ async def fetch_event_detail(event_url: str) -> tuple[str | None, bytes | None]:
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # 제목 추출: h1 또는 제목 클래스
+        # 제목 추출: <title> 태그 첫 번째 세그먼트
         title = None
-        h1 = soup.find("h1")
-        if h1:
-            title = h1.get_text(strip=True)
+        title_tag = soup.find("title")
+        if title_tag:
+            raw = title_tag.get_text(strip=True)
+            # "스페셜 썬데이 메이플 - 이벤트 - 메이플스토리" → "스페셜 썬데이 메이플"
+            segment = re.split(r"\s*[-|]\s*", raw)[0].strip()
+            if segment:
+                title = segment
 
         # 이벤트 본문 이미지: /common/ 경로 제외하고 연도 포함된 이미지
         all_imgs = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
