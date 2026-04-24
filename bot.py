@@ -1722,6 +1722,28 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+async def fetch_event_main_image(event_url: str) -> bytes | None:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(event_url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                html = await resp.text()
+
+        # 이벤트 페이지 본문 이미지 URL 추출 (lwi.nexon.com 또는 file.nexon.com)
+        img_urls = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
+        if not img_urls:
+            return None
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(img_urls[0], timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                return await resp.read()
+    except Exception:
+        return None
+
+
 async def send_maple_event(channel, event: dict):
     embed = discord.Embed(
         title=event["title"],
@@ -1731,19 +1753,13 @@ async def send_maple_event(channel, event: dict):
     )
     embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
 
-    if event.get("thumbnail"):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(event["thumbnail"], timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    img_data = await resp.read()
-            img_file = discord.File(io.BytesIO(img_data), filename="event.jpg")
-            embed.set_image(url="attachment://event.jpg")
-            await channel.send(embed=embed, file=img_file)
-            return
-        except Exception:
-            pass
-
-    await channel.send(embed=embed)
+    img_data = await fetch_event_main_image(event["url"])
+    if img_data:
+        img_file = discord.File(io.BytesIO(img_data), filename="event.png")
+        embed.set_image(url="attachment://event.png")
+        await channel.send(embed=embed, file=img_file)
+    else:
+        await channel.send(embed=embed)
 
 
 # ========== 메이플 뉴스 테스트 ==========
