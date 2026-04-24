@@ -1883,9 +1883,6 @@ async def maple_news_task():
             events = await fetch_maple_events()
             new_events = [e for e in events if e["id"] not in posted]
 
-            channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
-            if events and channel:
-                await send_maple_event(channel, events[0])
             if is_first_run:
                 for e in events:
                     posted.add(e["id"])
