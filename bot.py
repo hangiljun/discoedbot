@@ -121,17 +121,28 @@ bot._tasks_started = False
 def ensure_data_dir():
     os.makedirs("/data", exist_ok=True)
 
-def load_history() -> dict:
+def _load_json(path: str, default=None):
+    if default is None:
+        default = {}
     ensure_data_dir()
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return default
+
+def _save_json(path: str, data, indent: int = None):
+    ensure_data_dir()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=indent)
+
+def load_history() -> dict:
+    return _load_json(HISTORY_FILE)
 
 def save_history(history: dict):
-    ensure_data_dir()
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, ensure_ascii=False, indent=2)
+    _save_json(HISTORY_FILE, history, indent=2)
 
 def get_weekly_count(user_id: str) -> int:
     history = load_history()
@@ -151,27 +162,13 @@ def record_change(user_id: str, previous: str, new: str):
     save_history(history)
 
 def load_join_tracker() -> dict:
-    ensure_data_dir()
-    if os.path.exists(JOIN_TRACKER_FILE):
-        with open(JOIN_TRACKER_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _load_json(JOIN_TRACKER_FILE)
 
 def save_join_tracker(data: dict):
-    ensure_data_dir()
-    with open(JOIN_TRACKER_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_daily_stats() -> dict:
-    ensure_data_dir()
-    if os.path.exists(DAILY_STATS_FILE):
-        with open(DAILY_STATS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    _save_json(JOIN_TRACKER_FILE, data, indent=2)
 
 def save_daily_stats():
-    ensure_data_dir()
-    data = {
+    _save_json(DAILY_STATS_FILE, {
         "daily_join_count": daily_join_count,
         "daily_leave_count": daily_leave_count,
         "daily_leave_has_role": daily_leave_has_role,
@@ -188,31 +185,19 @@ def save_daily_stats():
         "weekly_auth_approve": weekly_auth_approve,
         "weekly_auth_reject": weekly_auth_reject,
         "weekly_bot_dm_count": weekly_bot_dm_count,
-    }
-    with open(DAILY_STATS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    }, indent=2)
 
 def save_daily_auth_list():
-    ensure_data_dir()
-    with open(DAILY_AUTH_LIST_FILE, "w", encoding="utf-8") as f:
-        json.dump(daily_auth_list, f, ensure_ascii=False, indent=2)
+    _save_json(DAILY_AUTH_LIST_FILE, daily_auth_list, indent=2)
 
 def save_daily_dm_users():
-    ensure_data_dir()
-    with open(DAILY_DM_USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(list(daily_dm_user_ids), f)
+    _save_json(DAILY_DM_USERS_FILE, list(daily_dm_user_ids))
 
 def load_pending() -> dict:
-    ensure_data_dir()
-    if os.path.exists(PENDING_FILE):
-        with open(PENDING_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _load_json(PENDING_FILE)
 
 def save_pending(pending: dict):
-    ensure_data_dir()
-    with open(PENDING_FILE, "w", encoding="utf-8") as f:
-        json.dump(pending, f, ensure_ascii=False, indent=2)
+    _save_json(PENDING_FILE, pending, indent=2)
 
 def add_pending(request_id: str, user_id: int, previous: str, new: str, new_server: str = None):
     pending = load_pending()
@@ -232,8 +217,6 @@ def remove_pending(request_id: str):
 
 # ========== 역할 변경 ==========
 async def update_server_role(member: discord.Member, new_server: str):
-    """새 서버 역할 추가 (기존 역할 유지)"""
-    # 새 서버 역할 부여
     new_role_name = SERVER_ROLES.get(new_server)
     if new_role_name:
         new_role = discord.utils.get(member.guild.roles, name=new_role_name)
@@ -248,16 +231,10 @@ async def update_server_role(member: discord.Member, new_server: str):
 
 # ========== 인증 신청 기록 관리 ==========
 def load_auth_pending() -> dict:
-    ensure_data_dir()
-    if os.path.exists(AUTH_PENDING_FILE):
-        with open(AUTH_PENDING_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _load_json(AUTH_PENDING_FILE)
 
 def save_auth_pending(pending: dict):
-    ensure_data_dir()
-    with open(AUTH_PENDING_FILE, "w", encoding="utf-8") as f:
-        json.dump(pending, f, ensure_ascii=False, indent=2)
+    _save_json(AUTH_PENDING_FILE, pending, indent=2)
 
 def add_auth_pending(request_id: str, user_id: int, server: str, level: str, nickname: str, method: str, is_underage: bool = False):
     pending = load_auth_pending()
@@ -338,7 +315,6 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        # 디스코드 가입일 30일 미만 체크 (차단 없이 DM만)
         days = (datetime.now(timezone.utc) - interaction.user.created_at).days
         if days < 30:
             try:
@@ -477,10 +453,9 @@ class AuthApproveView(discord.ui.View):
             await interaction.channel.send("❌ 닉네임 변경 권한 부족!")
             return
 
-        # 서버 역할 부여
         await update_server_role(member, data["server"])
 
-        # 메이플랜드는 서버 역할만 부여, 인증유저 역할 제외
+        # 메이플랜드는 인증유저 역할 미부여
         if data["server"] != "메이플랜드":
             auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
             if auth_role:
@@ -491,7 +466,6 @@ class AuthApproveView(discord.ui.View):
 
         remove_auth_pending(self.request_id)
 
-        # 유저에게 DM 전송
         try:
             await member.send(
                 "**[인증 완료]**\n\n"
@@ -722,7 +696,7 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
-        global daily_bot_dm_count, daily_dm_user_ids
+        global daily_bot_dm_count
         if message.author.id not in daily_dm_user_ids:
             daily_dm_user_ids.add(message.author.id)
             daily_bot_dm_count += 1
@@ -774,7 +748,6 @@ async def on_member_join(member: discord.Member):
     now = datetime.now(timezone.utc)
     days = (now - member.created_at).days
 
-    # 인증 리마인더 트래커 등록
     tracker = load_join_tracker()
     tracker[str(member.id)] = {
         "join_date": now.isoformat(),
@@ -782,7 +755,6 @@ async def on_member_join(member: discord.Member):
     }
     save_join_tracker(tracker)
 
-    # 웰컴 DM
     try:
         await member.send(
             "# 🍁메이플스토리 디스코드에 오신 걸 환영합니다!\n\n"
@@ -800,7 +772,6 @@ async def on_member_join(member: discord.Member):
     except discord.Forbidden:
         pass
 
-    # 전체 입장 로그
     join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
     if join_log_channel:
         label = "🚨 30일 미만 계정" if days < 30 else ""
@@ -853,7 +824,6 @@ async def on_member_remove(member: discord.Member):
         daily_leave_no_role += 1
     save_daily_stats()
 
-    # 트래커에서 제거
     tracker = load_join_tracker()
     tracker.pop(str(member.id), None)
     save_join_tracker(tracker)
@@ -1015,7 +985,6 @@ async def daily_summary_task():
         date_str = summary_date.strftime("%Y-%m-%d")
         join_log_channel = bot.get_channel(JOIN_LOG_CHANNEL_ID)
 
-        # 주간 카운터 누적
         weekly_join_count += daily_join_count
         weekly_leave_count += daily_leave_count
         weekly_leave_has_role += daily_leave_has_role
@@ -1042,7 +1011,6 @@ async def daily_summary_task():
             except discord.Forbidden:
                 pass
 
-            # 일요일(weekday=6) 자정이면 주간 요약 발송
             if summary_date.weekday() == 6:
                 week_start = (summary_date - timedelta(days=6)).strftime("%Y-%m-%d")
                 week_end = summary_date.strftime("%Y-%m-%d")
@@ -1071,7 +1039,6 @@ async def daily_summary_task():
                 weekly_bot_dm_count = 0
                 save_daily_stats()
 
-        # 당일 핸즈인증 승인 목록 → AUTH_ADMIN_CHANNEL_ID 발송
         auth_admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if auth_admin_channel:
             snapshot = list(daily_auth_list)
@@ -1421,41 +1388,26 @@ REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
 
 
 def load_report_panel_info() -> dict:
-    """채널별 패널 메시지 ID 저장: {str(channel_id): message_id}"""
-    ensure_data_dir()
-    if os.path.exists(REPORT_PANEL_INFO_FILE):
-        with open(REPORT_PANEL_INFO_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        # 구버전 형식 마이그레이션: {"channel_id": ..., "message_id": ...} → {str(channel_id): message_id}
-        if "channel_id" in data:
-            if data.get("channel_id"):
-                return {str(data["channel_id"]): data.get("message_id")}
-            return {}
-        return data
-    return {}
+    data = _load_json(REPORT_PANEL_INFO_FILE)
+    # migrate old format: {"channel_id": ..., "message_id": ...} → {str(channel_id): message_id}
+    if "channel_id" in data:
+        return {str(data["channel_id"]): data.get("message_id")} if data.get("channel_id") else {}
+    return data
 
 
 def save_report_panel_info(data: dict):
-    ensure_data_dir()
-    with open(REPORT_PANEL_INFO_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f)
+    _save_json(REPORT_PANEL_INFO_FILE, data)
 
 
 report_panel_info = load_report_panel_info()  # {str(channel_id): message_id}
 
 
 def load_reports() -> dict:
-    ensure_data_dir()
-    if os.path.exists(REPORT_FILE):
-        with open(REPORT_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    return _load_json(REPORT_FILE)
 
 
 def save_reports(data: dict):
-    ensure_data_dir()
-    with open(REPORT_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _save_json(REPORT_FILE, data, indent=2)
 
 
 def get_report_count(target_nick: str) -> int:
@@ -1723,39 +1675,28 @@ async def report_panel_error(interaction: discord.Interaction, error):
 
 
 async def fetch_event_detail(event_url: str) -> tuple[str | None, bytes | None]:
-    """이벤트 상세 페이지에서 (제목, 이미지 바이트) 반환"""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    }
     try:
+        timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession() as session:
-            async with session.get(event_url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            async with session.get(event_url, headers=MAPLE_HEADERS, timeout=timeout) as resp:
                 html = await resp.text()
 
-        soup = BeautifulSoup(html, "html.parser")
+            title = None
+            title_tag = BeautifulSoup(html, "html.parser").find("title")
+            if title_tag:
+                segment = re.split(r"\s*[-|]\s*", title_tag.get_text(strip=True))[0].strip()
+                if segment:
+                    title = segment
 
-        # 제목 추출: <title> 태그 첫 번째 세그먼트
-        title = None
-        title_tag = soup.find("title")
-        if title_tag:
-            raw = title_tag.get_text(strip=True)
-            # "스페셜 썬데이 메이플 - 이벤트 - 메이플스토리" → "스페셜 썬데이 메이플"
-            segment = re.split(r"\s*[-|]\s*", raw)[0].strip()
-            if segment:
-                title = segment
+            all_imgs = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
+            event_img_url = next(
+                (u for u in all_imgs if "/common/" not in u and re.search(r'/20\d{2}/', u)),
+                None
+            )
 
-        # 이벤트 본문 이미지: /common/ 경로 제외하고 연도 포함된 이미지
-        all_imgs = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
-        event_img_url = next(
-            (u for u in all_imgs if "/common/" not in u and re.search(r'/20\d{2}/', u)),
-            None
-        )
-
-        img_data = None
-        if event_img_url:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(event_img_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            img_data = None
+            if event_img_url:
+                async with session.get(event_img_url, timeout=timeout) as resp:
                     img_data = await resp.read()
 
         return title, img_data
@@ -1775,12 +1716,15 @@ async def send_maple_event(channel, event: dict):
     )
     embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
 
-    if img_data:
-        img_file = discord.File(io.BytesIO(img_data), filename="event.png")
-        embed.set_image(url="attachment://event.png")
-        await channel.send(embed=embed, file=img_file)
-    else:
-        await channel.send(embed=embed)
+    try:
+        if img_data:
+            img_file = discord.File(io.BytesIO(img_data), filename="event.png")
+            embed.set_image(url="attachment://event.png")
+            await channel.send(embed=embed, file=img_file)
+        else:
+            await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[MAPLE_NEWS] 전송 실패 ({event['id']}): {e}")
 
 
 # ========== 메이플 뉴스 테스트 ==========
@@ -1805,45 +1749,33 @@ async def maple_news_test(interaction: discord.Interaction):
 MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
 MAPLE_EVENT_URL = "https://maplestory.nexon.com/News/Event"
 MAPLE_EVENTS_FILE = "/data/maple_events_posted.json"
+MAPLE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+    "Referer": "https://maplestory.nexon.com/",
+}
 
 
 def load_posted_events() -> set:
-    ensure_data_dir()
-    if os.path.exists(MAPLE_EVENTS_FILE):
-        try:
-            with open(MAPLE_EVENTS_FILE, "r") as f:
-                return set(json.load(f))
-        except Exception:
-            pass
-    return set()
-
+    return set(_load_json(MAPLE_EVENTS_FILE, default=[]))
 
 def save_posted_events(posted: set):
-    ensure_data_dir()
-    with open(MAPLE_EVENTS_FILE, "w") as f:
-        json.dump(list(posted), f)
+    _save_json(MAPLE_EVENTS_FILE, list(posted))
 
 
 async def fetch_maple_events() -> list[dict]:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-        "Referer": "https://maplestory.nexon.com/",
-    }
     async with aiohttp.ClientSession() as session:
-        async with session.get(MAPLE_EVENT_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+        async with session.get(MAPLE_EVENT_URL, headers=MAPLE_HEADERS, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             html = await resp.text()
 
-    # 정규식으로 이벤트 ID 추출
     event_ids = list(dict.fromkeys(re.findall(r'/News/Event/(\d+)', html)))
 
     soup = BeautifulSoup(html, "html.parser")
     events = []
 
     for event_id in event_ids:
-        # 해당 이벤트 링크 태그 찾기
-        a = soup.find("a", href=re.compile(rf'/News/Event/{event_id}'))
+        a = soup.find("a", href=lambda h: h and f"/News/Event/{event_id}" in h)
         if not a:
             continue
 
@@ -1876,18 +1808,16 @@ async def fetch_maple_events() -> list[dict]:
 async def maple_news_task():
     await bot.wait_until_ready()
     posted = load_posted_events()
-    is_first_run = len(posted) == 0
 
     while True:
         try:
             events = await fetch_maple_events()
             new_events = [e for e in events if e["id"] not in posted]
 
-            if is_first_run:
+            if not posted:
                 for e in events:
                     posted.add(e["id"])
                 save_posted_events(posted)
-                is_first_run = False
             elif new_events:
                 channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
                 for event in reversed(new_events):
@@ -1900,7 +1830,7 @@ async def maple_news_task():
         except Exception as e:
             print(f"[MAPLE_NEWS] 오류: {e}")
 
-        await asyncio.sleep(3600)  # 1시간마다 체크
+        await asyncio.sleep(3600)
 
 
 @bot.event
