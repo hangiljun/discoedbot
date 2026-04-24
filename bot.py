@@ -9,6 +9,7 @@ import uuid
 import asyncio
 import aiohttp
 import re
+import io
 from bs4 import BeautifulSoup
 
 load_dotenv()
@@ -1721,6 +1722,30 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+async def send_maple_event(channel, event: dict):
+    embed = discord.Embed(
+        title=event["title"],
+        url=event["url"],
+        description=event["date"] if event["date"] else None,
+        color=discord.Color.orange()
+    )
+    embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
+
+    if event.get("thumbnail"):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(event["thumbnail"], timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    img_data = await resp.read()
+            img_file = discord.File(io.BytesIO(img_data), filename="event.jpg")
+            embed.set_image(url="attachment://event.jpg")
+            await channel.send(embed=embed, file=img_file)
+            return
+        except Exception:
+            pass
+
+    await channel.send(embed=embed)
+
+
 # ========== 메이플 뉴스 테스트 ==========
 @bot.tree.command(name="메이플뉴스테스트", description="최신 이벤트 1개를 채널에 전송 (관리자 전용)")
 @app_commands.checks.has_permissions(administrator=True)
@@ -1733,16 +1758,7 @@ async def maple_news_test(interaction: discord.Interaction):
             return
         event = events[0]
         channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
-        embed = discord.Embed(
-            title=event["title"],
-            url=event["url"],
-            description=event["date"] if event["date"] else None,
-            color=discord.Color.orange()
-        )
-        if event["thumbnail"]:
-            embed.set_image(url=event["thumbnail"])
-        embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
-        await channel.send(embed=embed)
+        await send_maple_event(channel, event)
         await interaction.followup.send("✅ 테스트 전송 완료!", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ 오류: {e}", ephemeral=True)
@@ -1831,39 +1847,18 @@ async def maple_news_task():
             new_events = [e for e in events if e["id"] not in posted]
 
             if is_first_run:
-                # 첫 실행: 최신 이벤트 1개만 전송하고 나머지는 기록만
                 channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
                 if events and channel:
-                    event = events[0]
-                    embed = discord.Embed(
-                        title=event["title"],
-                        url=event["url"],
-                        description=event["date"] if event["date"] else None,
-                        color=discord.Color.orange()
-                    )
-                    if event["thumbnail"]:
-                        embed.set_image(url=event["thumbnail"])
-                    embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
-                    await channel.send(embed=embed)
+                    await send_maple_event(channel, events[0])
                 for e in events:
                     posted.add(e["id"])
                 save_posted_events(posted)
                 is_first_run = False
-                print(f"[MAPLE_NEWS] 첫 실행 - 최신 이벤트 1개 전송, {len(events)}개 시드 완료")
             elif new_events:
                 channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
                 for event in reversed(new_events):
                     if channel:
-                        embed = discord.Embed(
-                            title=event["title"],
-                            url=event["url"],
-                            description=event["date"] if event["date"] else None,
-                            color=discord.Color.orange()
-                        )
-                        if event["thumbnail"]:
-                            embed.set_image(url=event["thumbnail"])
-                        embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
-                        await channel.send(embed=embed)
+                        await send_maple_event(channel, event)
                     posted.add(event["id"])
                 save_posted_events(posted)
                 print(f"[MAPLE_NEWS] 새 이벤트 {len(new_events)}개 전송 완료")
