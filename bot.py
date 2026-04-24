@@ -1784,6 +1784,10 @@ async def fetch_maple_events() -> list[dict]:
             print(f"[MAPLE_NEWS] HTML 길이: {len(html)} | 앞부분: {html[:300]}")
 
     soup = BeautifulSoup(html, "html.parser")
+    all_links = soup.select('a[href*="/News/Event/"]')
+    print(f"[MAPLE_NEWS] 이벤트 링크 수: {len(all_links)}")
+    if all_links:
+        print(f"[MAPLE_NEWS] 첫 링크 href: {all_links[0].get('href')}")
     events = []
     seen_ids = set()
 
