@@ -8,6 +8,7 @@ import json
 import uuid
 import asyncio
 import aiohttp
+import re
 from bs4 import BeautifulSoup
 
 load_dotenv()
@@ -1783,35 +1784,28 @@ async def fetch_maple_events() -> list[dict]:
             html = await resp.text()
             print(f"[MAPLE_NEWS] HTML 길이: {len(html)} | 앞부분: {html[:300]}")
 
-    soup = BeautifulSoup(html, "html.parser")
-    all_links = soup.select('a[href*="/News/Event/"]')
-    print(f"[MAPLE_NEWS] 이벤트 링크 수: {len(all_links)}")
-    if all_links:
-        print(f"[MAPLE_NEWS] 첫 링크 href: {all_links[0].get('href')}")
-    events = []
-    seen_ids = set()
+    # 정규식으로 이벤트 ID 추출
+    event_ids = list(dict.fromkeys(re.findall(r'/News/Event/(\d+)', html)))
+    print(f"[MAPLE_NEWS] 정규식으로 찾은 이벤트 ID: {event_ids[:5]}")
 
-    for a in soup.select('a[href*="/News/Event/"]'):
-        href = a.get("href", "")
-        parts = href.strip("/").split("/")
-        if len(parts) < 3:
+    soup = BeautifulSoup(html, "html.parser")
+    events = []
+
+    for event_id in event_ids:
+        # 해당 이벤트 링크 태그 찾기
+        a = soup.find("a", href=re.compile(rf'/News/Event/{event_id}'))
+        if not a:
             continue
-        event_id = parts[-1]
-        if not event_id.isdigit() or event_id in seen_ids:
-            continue
-        seen_ids.add(event_id)
 
         img_tag = a.find("img")
         thumbnail = img_tag.get("src") if img_tag else None
 
-        # 제목: img 태그 제외한 텍스트
         for tag in a.find_all("img"):
             tag.decompose()
         title = a.get_text(separator=" ", strip=True)
         if not title:
-            continue
+            title = f"이벤트 {event_id}"
 
-        # 날짜: li 내 전체 텍스트에서 제목 제거
         li = a.find_parent("li")
         date_text = ""
         if li:
