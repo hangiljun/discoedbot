@@ -1771,10 +1771,17 @@ def save_posted_events(posted: set):
 
 
 async def fetch_maple_events() -> list[dict]:
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Referer": "https://maplestory.nexon.com/",
+    }
     async with aiohttp.ClientSession() as session:
         async with session.get(MAPLE_EVENT_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            print(f"[MAPLE_NEWS] HTTP {resp.status} | URL: {resp.url}")
             html = await resp.text()
+            print(f"[MAPLE_NEWS] HTML 길이: {len(html)} | 앞부분: {html[:300]}")
 
     soup = BeautifulSoup(html, "html.parser")
     events = []
