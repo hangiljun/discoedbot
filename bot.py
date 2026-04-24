@@ -1829,12 +1829,25 @@ async def maple_news_task():
             new_events = [e for e in events if e["id"] not in posted]
 
             if is_first_run:
-                # 첫 실행: 기존 이벤트는 기록만 하고 전송하지 않음
+                # 첫 실행: 최신 이벤트 1개만 전송하고 나머지는 기록만
+                channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
+                if events and channel:
+                    event = events[0]
+                    embed = discord.Embed(
+                        title=event["title"],
+                        url=event["url"],
+                        description=event["date"] if event["date"] else None,
+                        color=discord.Color.orange()
+                    )
+                    if event["thumbnail"]:
+                        embed.set_image(url=event["thumbnail"])
+                    embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
+                    await channel.send(embed=embed)
                 for e in events:
                     posted.add(e["id"])
                 save_posted_events(posted)
                 is_first_run = False
-                print(f"[MAPLE_NEWS] 첫 실행 - 기존 이벤트 {len(events)}개 시드 완료")
+                print(f"[MAPLE_NEWS] 첫 실행 - 최신 이벤트 1개 전송, {len(events)}개 시드 완료")
             elif new_events:
                 channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
                 for event in reversed(new_events):
