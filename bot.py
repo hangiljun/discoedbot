@@ -1720,6 +1720,33 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+# ========== 메이플 뉴스 테스트 ==========
+@bot.tree.command(name="메이플뉴스테스트", description="최신 이벤트 1개를 채널에 전송 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def maple_news_test(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        events = await fetch_maple_events()
+        if not events:
+            await interaction.followup.send("❌ 이벤트를 가져오지 못했습니다.", ephemeral=True)
+            return
+        event = events[0]
+        channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
+        embed = discord.Embed(
+            title=event["title"],
+            url=event["url"],
+            description=event["date"] if event["date"] else None,
+            color=discord.Color.orange()
+        )
+        if event["thumbnail"]:
+            embed.set_image(url=event["thumbnail"])
+        embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
+        await channel.send(embed=embed)
+        await interaction.followup.send("✅ 테스트 전송 완료!", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ 오류: {e}", ephemeral=True)
+
+
 # ========== 메이플스토리 이벤트 뉴스 자동 알림 ==========
 MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
 MAPLE_EVENT_URL = "https://maplestory.nexon.com/News/Event"
