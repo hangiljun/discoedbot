@@ -1780,13 +1780,10 @@ async def fetch_maple_events() -> list[dict]:
     }
     async with aiohttp.ClientSession() as session:
         async with session.get(MAPLE_EVENT_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            print(f"[MAPLE_NEWS] HTTP {resp.status} | URL: {resp.url}")
             html = await resp.text()
-            print(f"[MAPLE_NEWS] HTML 길이: {len(html)} | 앞부분: {html[:300]}")
 
     # 정규식으로 이벤트 ID 추출
     event_ids = list(dict.fromkeys(re.findall(r'/News/Event/(\d+)', html)))
-    print(f"[MAPLE_NEWS] 정규식으로 찾은 이벤트 ID: {event_ids[:5]}")
 
     soup = BeautifulSoup(html, "html.parser")
     events = []
