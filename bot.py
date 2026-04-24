@@ -7,6 +7,8 @@ import os
 import json
 import uuid
 import asyncio
+import aiohttp
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -1718,6 +1720,118 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+# ========== 메이플스토리 이벤트 뉴스 자동 알림 ==========
+MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
+MAPLE_EVENT_URL = "https://maplestory.nexon.com/News/Event"
+MAPLE_EVENTS_FILE = "/data/maple_events_posted.json"
+
+
+def load_posted_events() -> set:
+    ensure_data_dir()
+    if os.path.exists(MAPLE_EVENTS_FILE):
+        try:
+            with open(MAPLE_EVENTS_FILE, "r") as f:
+                return set(json.load(f))
+        except Exception:
+            pass
+    return set()
+
+
+def save_posted_events(posted: set):
+    ensure_data_dir()
+    with open(MAPLE_EVENTS_FILE, "w") as f:
+        json.dump(list(posted), f)
+
+
+async def fetch_maple_events() -> list[dict]:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(MAPLE_EVENT_URL, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            html = await resp.text()
+
+    soup = BeautifulSoup(html, "html.parser")
+    events = []
+    seen_ids = set()
+
+    for a in soup.select('a[href*="/News/Event/"]'):
+        href = a.get("href", "")
+        parts = href.strip("/").split("/")
+        if len(parts) < 3:
+            continue
+        event_id = parts[-1]
+        if not event_id.isdigit() or event_id in seen_ids:
+            continue
+        seen_ids.add(event_id)
+
+        img_tag = a.find("img")
+        thumbnail = img_tag.get("src") if img_tag else None
+
+        # 제목: img 태그 제외한 텍스트
+        for tag in a.find_all("img"):
+            tag.decompose()
+        title = a.get_text(separator=" ", strip=True)
+        if not title:
+            continue
+
+        # 날짜: li 내 전체 텍스트에서 제목 제거
+        li = a.find_parent("li")
+        date_text = ""
+        if li:
+            full = li.get_text(separator=" ", strip=True)
+            date_text = full.replace(title, "").strip()
+
+        events.append({
+            "id": event_id,
+            "title": title,
+            "date": date_text,
+            "url": f"https://maplestory.nexon.com/News/Event/{event_id}",
+            "thumbnail": thumbnail,
+        })
+
+    return events
+
+
+async def maple_news_task():
+    await bot.wait_until_ready()
+    posted = load_posted_events()
+    is_first_run = len(posted) == 0
+
+    while True:
+        try:
+            events = await fetch_maple_events()
+            new_events = [e for e in events if e["id"] not in posted]
+
+            if is_first_run:
+                # 첫 실행: 기존 이벤트는 기록만 하고 전송하지 않음
+                for e in events:
+                    posted.add(e["id"])
+                save_posted_events(posted)
+                is_first_run = False
+                print(f"[MAPLE_NEWS] 첫 실행 - 기존 이벤트 {len(events)}개 시드 완료")
+            elif new_events:
+                channel = bot.get_channel(MAPLE_NEWS_CHANNEL_ID)
+                for event in reversed(new_events):
+                    if channel:
+                        embed = discord.Embed(
+                            title=event["title"],
+                            url=event["url"],
+                            description=event["date"] if event["date"] else None,
+                            color=discord.Color.orange()
+                        )
+                        if event["thumbnail"]:
+                            embed.set_image(url=event["thumbnail"])
+                        embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
+                        await channel.send(embed=embed)
+                    posted.add(event["id"])
+                save_posted_events(posted)
+                print(f"[MAPLE_NEWS] 새 이벤트 {len(new_events)}개 전송 완료")
+
+        except Exception as e:
+            print(f"[MAPLE_NEWS] 오류: {e}")
+
+        await asyncio.sleep(3600)  # 1시간마다 체크
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -1750,6 +1864,7 @@ async def on_ready():
         asyncio.create_task(daily_summary_task())
         asyncio.create_task(reminder_task())
         asyncio.create_task(affiliate_promo_task())
+        asyncio.create_task(maple_news_task())
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
