@@ -1722,7 +1722,8 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
-async def fetch_event_main_image(event_url: str) -> bytes | None:
+async def fetch_event_detail(event_url: str) -> tuple[str | None, bytes | None]:
+    """이벤트 상세 페이지에서 (제목, 이미지 바이트) 반환"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept-Language": "ko-KR,ko;q=0.9",
@@ -1732,28 +1733,44 @@ async def fetch_event_main_image(event_url: str) -> bytes | None:
             async with session.get(event_url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 html = await resp.text()
 
-        # 이벤트 페이지 본문 이미지 URL 추출 (lwi.nexon.com 또는 file.nexon.com)
-        img_urls = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
-        if not img_urls:
-            return None
+        soup = BeautifulSoup(html, "html.parser")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(img_urls[0], timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                return await resp.read()
+        # 제목 추출: h1 또는 제목 클래스
+        title = None
+        h1 = soup.find("h1")
+        if h1:
+            title = h1.get_text(strip=True)
+
+        # 이벤트 본문 이미지: /common/ 경로 제외하고 연도 포함된 이미지
+        all_imgs = re.findall(r'https://(?:lwi|file)\.nexon\.com/maplestory/[^\s"\'<>]+\.(?:png|jpg|jpeg|gif)', html)
+        event_img_url = next(
+            (u for u in all_imgs if "/common/" not in u and re.search(r'/20\d{2}/', u)),
+            None
+        )
+
+        img_data = None
+        if event_img_url:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(event_img_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    img_data = await resp.read()
+
+        return title, img_data
     except Exception:
-        return None
+        return None, None
 
 
 async def send_maple_event(channel, event: dict):
+    detail_title, img_data = await fetch_event_detail(event["url"])
+    title = detail_title or event["title"]
+
     embed = discord.Embed(
-        title=event["title"],
+        title=title,
         url=event["url"],
         description=event["date"] if event["date"] else None,
         color=discord.Color.orange()
     )
     embed.set_footer(text="🍁 메이플스토리 이벤트 업데이트")
 
-    img_data = await fetch_event_main_image(event["url"])
     if img_data:
         img_file = discord.File(io.BytesIO(img_data), filename="event.png")
         embed.set_image(url="attachment://event.png")
