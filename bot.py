@@ -1847,6 +1847,13 @@ class GameRoleView(discord.ui.View):
                 url=f"https://discord.com/channels/{guild_id}/1081075118761066556",
                 row=0
             ))
+        mapleland_btn = discord.ui.Button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland", row=0)
+        mapleland_btn.callback = self._mapleland
+        self.add_item(mapleland_btn)
+
+        mapleplanet_btn = discord.ui.Button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet", row=0)
+        mapleplanet_btn.callback = self._mapleplanet
+        self.add_item(mapleplanet_btn)
 
     async def _toggle_role(self, interaction: discord.Interaction, role_name: str):
         role = discord.utils.get(interaction.guild.roles, name=role_name)
@@ -1860,12 +1867,10 @@ class GameRoleView(discord.ui.View):
             await interaction.user.add_roles(role)
             await interaction.response.send_message(f"✅ **{role_name}** 역할이 부여되었습니다!", ephemeral=True)
 
-    @discord.ui.button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland", row=0)
-    async def mapleland(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _mapleland(self, interaction: discord.Interaction):
         await self._toggle_role(interaction, "메이플랜드")
 
-    @discord.ui.button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet", row=0)
-    async def mapleplanet(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def _mapleplanet(self, interaction: discord.Interaction):
         await self._toggle_role(interaction, "메이플플래닛")
 
 
