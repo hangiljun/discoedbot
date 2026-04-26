@@ -1873,7 +1873,7 @@ async def game_role_panel(interaction: discord.Interaction):
         return
     embed = discord.Embed(
         title="🎮 게임 역할 선택",
-        description="원하는 게임 버튼을 클릭하면 역할이 자동으로 부여됩니다.\n다시 클릭하면 역할이 해제됩니다.",
+        description="메이플 본서버 유저는 메이플 본서버 인증 해주세요.\n메이플클래식 유저 해당서버 버튼 클릭",
         color=discord.Color.green()
     )
     await channel.send(embed=embed, view=GameRoleView())
