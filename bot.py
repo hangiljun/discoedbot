@@ -1884,7 +1884,7 @@ async def game_role_panel(interaction: discord.Interaction):
         await interaction.followup.send("❌ 채널을 찾을 수 없습니다.", ephemeral=True)
         return
     embed = discord.Embed(
-        title="🎮 게임 역할 선택",
+        title="서버 역할 선택",
         description="메이플 본서버 유저는 메이플 본서버 인증 해주세요.\n메이플클래식 유저 해당서버 버튼 클릭",
         color=discord.Color.green()
     )
