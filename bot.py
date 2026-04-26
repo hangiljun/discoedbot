@@ -1833,6 +1833,58 @@ async def maple_news_task():
         await asyncio.sleep(3600)
 
 
+# ========== 게임 역할 버튼 ==========
+GAME_ROLE_CHANNEL_ID = 1213334715663130645
+
+
+class GameRoleView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    async def _toggle_role(self, interaction: discord.Interaction, role_name: str):
+        role = discord.utils.get(interaction.guild.roles, name=role_name)
+        if not role:
+            await interaction.response.send_message(f"❌ `{role_name}` 역할을 찾을 수 없습니다.", ephemeral=True)
+            return
+        if role in interaction.user.roles:
+            await interaction.user.remove_roles(role)
+            await interaction.response.send_message(f"✅ **{role_name}** 역할이 해제되었습니다.", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"✅ **{role_name}** 역할이 부여되었습니다!", ephemeral=True)
+
+    @discord.ui.button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland")
+    async def mapleland(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._toggle_role(interaction, "메이플랜드")
+
+    @discord.ui.button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet")
+    async def mapleplanet(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._toggle_role(interaction, "메이플플래닛")
+
+
+@bot.tree.command(name="게임역할패널", description="게임 역할 선택 버튼 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def game_role_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    channel = bot.get_channel(GAME_ROLE_CHANNEL_ID)
+    if not channel:
+        await interaction.followup.send("❌ 채널을 찾을 수 없습니다.", ephemeral=True)
+        return
+    embed = discord.Embed(
+        title="🎮 게임 역할 선택",
+        description="원하는 게임 버튼을 클릭하면 역할이 자동으로 부여됩니다.\n다시 클릭하면 역할이 해제됩니다.",
+        color=discord.Color.green()
+    )
+    await channel.send(embed=embed, view=GameRoleView())
+    await interaction.followup.send("✅ 게임 역할 패널이 생성되었습니다!", ephemeral=True)
+
+
+@game_role_panel.error
+async def game_role_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -1841,6 +1893,7 @@ async def on_ready():
     bot.add_view(NicknameButtonView())
     bot.add_view(AuthButtonView())
     bot.add_view(ReportButtonView())
+    bot.add_view(GameRoleView())
 
     pending = load_pending()
     for request_id in pending:
