@@ -1838,8 +1838,15 @@ GAME_ROLE_CHANNEL_ID = 1213334715663130645
 
 
 class GameRoleView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, guild_id: int = None):
         super().__init__(timeout=None)
+        if guild_id:
+            self.add_item(discord.ui.Button(
+                label="메이플본서버",
+                style=discord.ButtonStyle.link,
+                url=f"https://discord.com/channels/{guild_id}/1081075118761066556",
+                row=0
+            ))
 
     async def _toggle_role(self, interaction: discord.Interaction, role_name: str):
         role = discord.utils.get(interaction.guild.roles, name=role_name)
@@ -1853,18 +1860,11 @@ class GameRoleView(discord.ui.View):
             await interaction.user.add_roles(role)
             await interaction.response.send_message(f"✅ **{role_name}** 역할이 부여되었습니다!", ephemeral=True)
 
-    @discord.ui.button(label="메이플본서버", style=discord.ButtonStyle.secondary, custom_id="game_role_main_server")
-    async def main_server(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            f"👉 <#1081075118761066556> 채널로 이동해서 인증해주세요!",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland")
+    @discord.ui.button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland", row=0)
     async def mapleland(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._toggle_role(interaction, "메이플랜드")
 
-    @discord.ui.button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet")
+    @discord.ui.button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet", row=0)
     async def mapleplanet(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._toggle_role(interaction, "메이플플래닛")
 
@@ -1883,7 +1883,7 @@ async def game_role_panel(interaction: discord.Interaction):
         description="메이플 본서버 유저는 메이플 본서버 인증 해주세요.\n메이플클래식 유저 해당서버 버튼 클릭",
         color=discord.Color.green()
     )
-    await channel.send(embed=embed, view=GameRoleView())
+    await channel.send(embed=embed, view=GameRoleView(guild_id=interaction.guild.id))
     await interaction.followup.send("✅ 게임 역할 패널이 생성되었습니다!", ephemeral=True)
 
 
