@@ -1853,6 +1853,13 @@ class GameRoleView(discord.ui.View):
             await interaction.user.add_roles(role)
             await interaction.response.send_message(f"✅ **{role_name}** 역할이 부여되었습니다!", ephemeral=True)
 
+    @discord.ui.button(label="메이플본서버", style=discord.ButtonStyle.secondary, custom_id="game_role_main_server")
+    async def main_server(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            f"👉 <#1081075118761066556> 채널로 이동해서 인증해주세요!",
+            ephemeral=True
+        )
+
     @discord.ui.button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland")
     async def mapleland(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._toggle_role(interaction, "메이플랜드")
