@@ -1866,8 +1866,9 @@ class GameRoleView(discord.ui.View):
 @app_commands.checks.has_permissions(administrator=True)
 async def game_role_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    channel = bot.get_channel(GAME_ROLE_CHANNEL_ID)
-    if not channel:
+    try:
+        channel = await bot.fetch_channel(GAME_ROLE_CHANNEL_ID)
+    except Exception:
         await interaction.followup.send("❌ 채널을 찾을 수 없습니다.", ephemeral=True)
         return
     embed = discord.Embed(
