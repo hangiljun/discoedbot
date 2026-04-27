@@ -1684,8 +1684,10 @@ async def check_nickname_changed(nickname: str) -> str:
         return "조회 불가"
     headers = {"x-nxopen-api-key": NEXON_API_KEY}
     KST = timezone(timedelta(hours=9))
-    yesterday = (datetime.now(KST) - timedelta(days=1)).strftime("%Y-%m-%d")
-    three_months_ago = (datetime.now(KST) - timedelta(days=90)).strftime("%Y-%m-%d")
+    now = datetime.now(KST)
+    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    # 최근 → 과거 순으로 체크해서 직전 닉네임을 정확히 잡음
+    check_days = [7, 14, 30, 60, 90]
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -1710,18 +1712,20 @@ async def check_nickname_changed(nickname: str) -> str:
                     return "조회 실패"
                 current_name = (await resp.json()).get("character_name")
 
-            async with session.get(
-                f"{NEXON_API_BASE}/character/basic",
-                params={"ocid": ocid, "date": three_months_ago},
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status != 200:
-                    return "✅ 변경 없음 (3개월 이내 데이터 없음)"
-                old_name = (await resp.json()).get("character_name")
+            for days in check_days:
+                check_date = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+                async with session.get(
+                    f"{NEXON_API_BASE}/character/basic",
+                    params={"ocid": ocid, "date": check_date},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status != 200:
+                        continue
+                    old_name = (await resp.json()).get("character_name")
+                    if old_name and old_name != current_name:
+                        return f"⚠️ 변경 있음 (`{old_name}` → `{current_name}`)"
 
-        if old_name and current_name and old_name != current_name:
-            return f"⚠️ 변경 있음 (`{old_name}` → `{current_name}`)"
         return "✅ 변경 없음"
     except Exception:
         return "조회 실패"
