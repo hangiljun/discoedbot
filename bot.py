@@ -28,6 +28,8 @@ JOIN_TRACKER_FILE = "/data/join_tracker.json"
 DAILY_STATS_FILE = "/data/daily_stats.json"
 DAILY_AUTH_LIST_FILE = "/data/daily_auth_list.json"
 DAILY_DM_USERS_FILE = "/data/daily_dm_users.json"
+NEXON_API_KEY = os.getenv("NEXON_API_KEY")
+NEXON_API_BASE = "https://open.api.nexon.com/maplestory/v1"
 # ==========================
 
 # 서버명 → 역할명 매핑 (챌린저스 1~4는 모두 챌린저스 역할)
@@ -364,11 +366,26 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
             ephemeral=True
         )
 
+        char_info = await fetch_nexon_character(nickname_val)
+        if char_info:
+            actual_level = char_info.get("character_level", "?")
+            actual_world = char_info.get("world_name", "?")
+            actual_class = char_info.get("character_class", "?")
+            level_match = "✅" if str(actual_level) == level_val else f"⚠️ 실제:{actual_level}"
+            world_match = "✅" if actual_world == server else f"⚠️ 실제:{actual_world}"
+            nexon_info = (
+                f"\n📊 **넥슨 캐릭터 조회**\n"
+                f"레벨: {level_match} | 서버: {world_match} | 직업: {actual_class}"
+            )
+        else:
+            nexon_info = "\n📊 **넥슨 캐릭터 조회**: 캐릭터를 찾을 수 없음"
+
         await admin_channel.send(
             f"🔐 **인증 신청**\n"
             f"신청자: {interaction.user.mention}\n"
             f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
-            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`",
+            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`"
+            f"{nexon_info}",
             view=view
         )
 
@@ -1672,6 +1689,38 @@ async def report_panel_error(interaction: discord.Interaction, error):
             await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
         except Exception:
             pass
+
+
+async def fetch_nexon_character(nickname: str) -> dict | None:
+    if not NEXON_API_KEY:
+        return None
+    headers = {"x-nxopen-api-key": NEXON_API_KEY}
+    KST = timezone(timedelta(hours=9))
+    yesterday = (datetime.now(KST) - timedelta(days=1)).strftime("%Y-%m-%d")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{NEXON_API_BASE}/id",
+                params={"character_name": nickname},
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                ocid = (await resp.json()).get("ocid")
+            if not ocid:
+                return None
+            async with session.get(
+                f"{NEXON_API_BASE}/character/basic",
+                params={"ocid": ocid, "date": yesterday},
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                return await resp.json()
+    except Exception:
+        return None
 
 
 async def fetch_event_detail(event_url: str) -> tuple[str | None, bytes | None]:
