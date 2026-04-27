@@ -51,13 +51,14 @@ SERVER_ROLES = {
     "노바": "노바",
     "제니스": "제니스",
     "메이플랜드": "메이플랜드",
+    "메이플플래닛": "메이플플래닛",
 }
 
 AUTH_SERVER_LIST = [
     "챌린저스1", "챌린저스2", "챌린저스3", "챌린저스4",
     "스카니아", "루나", "엘리시움", "크로아", "베라", "오로라",
     "에오스", "헬리오스", "유니온", "이노시스", "레드",
-    "아케인", "노바", "제니스", "메이플랜드"
+    "아케인", "노바", "제니스", "메이플랜드", "메이플플래닛"
 ]
 
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
@@ -455,8 +456,8 @@ class AuthApproveView(discord.ui.View):
 
         await update_server_role(member, data["server"])
 
-        # 메이플랜드는 인증유저 역할 미부여
-        if data["server"] != "메이플랜드":
+        # 메이플랜드/메이플플래닛은 인증유저 역할 미부여
+        if data["server"] not in ("메이플랜드", "메이플플래닛"):
             auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
             if auth_role:
                 try:
