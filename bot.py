@@ -366,26 +366,14 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
             ephemeral=True
         )
 
-        char_info = await fetch_nexon_character(nickname_val)
-        if char_info:
-            actual_level = char_info.get("character_level", "?")
-            actual_world = char_info.get("world_name", "?")
-            actual_class = char_info.get("character_class", "?")
-            level_match = "✅" if str(actual_level) == level_val else f"⚠️ 실제:{actual_level}"
-            world_match = "✅" if actual_world == server else f"⚠️ 실제:{actual_world}"
-            nexon_info = (
-                f"\n📊 **넥슨 캐릭터 조회**\n"
-                f"레벨: {level_match} | 서버: {world_match} | 직업: {actual_class}"
-            )
-        else:
-            nexon_info = "\n📊 **넥슨 캐릭터 조회**: 캐릭터를 찾을 수 없음"
+        nick_check = await check_nickname_changed(nickname_val)
 
         await admin_channel.send(
             f"🔐 **인증 신청**\n"
             f"신청자: {interaction.user.mention}\n"
             f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
-            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`"
-            f"{nexon_info}",
+            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`\n"
+            f"📊 닉네임 변경 이력 (3개월): {nick_check}",
             view=view
         )
 
@@ -1691,12 +1679,13 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
-async def fetch_nexon_character(nickname: str) -> dict | None:
+async def check_nickname_changed(nickname: str) -> str:
     if not NEXON_API_KEY:
-        return None
+        return "조회 불가"
     headers = {"x-nxopen-api-key": NEXON_API_KEY}
     KST = timezone(timedelta(hours=9))
     yesterday = (datetime.now(KST) - timedelta(days=1)).strftime("%Y-%m-%d")
+    three_months_ago = (datetime.now(KST) - timedelta(days=90)).strftime("%Y-%m-%d")
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -1706,10 +1695,11 @@ async def fetch_nexon_character(nickname: str) -> dict | None:
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status != 200:
-                    return None
+                    return "캐릭터 없음"
                 ocid = (await resp.json()).get("ocid")
             if not ocid:
-                return None
+                return "캐릭터 없음"
+
             async with session.get(
                 f"{NEXON_API_BASE}/character/basic",
                 params={"ocid": ocid, "date": yesterday},
@@ -1717,10 +1707,24 @@ async def fetch_nexon_character(nickname: str) -> dict | None:
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status != 200:
-                    return None
-                return await resp.json()
+                    return "조회 실패"
+                current_name = (await resp.json()).get("character_name")
+
+            async with session.get(
+                f"{NEXON_API_BASE}/character/basic",
+                params={"ocid": ocid, "date": three_months_ago},
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return "✅ 변경 없음 (3개월 이내 데이터 없음)"
+                old_name = (await resp.json()).get("character_name")
+
+        if old_name and current_name and old_name != current_name:
+            return f"⚠️ 변경 있음 (`{old_name}` → `{current_name}`)"
+        return "✅ 변경 없음"
     except Exception:
-        return None
+        return "조회 실패"
 
 
 async def fetch_event_detail(event_url: str) -> tuple[str | None, bytes | None]:
