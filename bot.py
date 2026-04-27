@@ -368,8 +368,7 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
             f"🔐 **인증 신청**\n"
             f"신청자: {interaction.user.mention}\n"
             f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
-            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`\n"
-            f"사진 전송 방법: **{method}**",
+            f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`",
             view=view
         )
 
