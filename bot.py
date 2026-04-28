@@ -1995,23 +1995,11 @@ class GameRoleView(discord.ui.View):
         mapleplanet_btn.callback = self._mapleplanet
         self.add_item(mapleplanet_btn)
 
-    async def _toggle_role(self, interaction: discord.Interaction, role_name: str):
-        role = discord.utils.get(interaction.guild.roles, name=role_name)
-        if not role:
-            await interaction.response.send_message(f"❌ `{role_name}` 역할을 찾을 수 없습니다.", ephemeral=True)
-            return
-        if role in interaction.user.roles:
-            await interaction.user.remove_roles(role)
-            await interaction.response.send_message(f"✅ **{role_name}** 역할이 해제되었습니다.", ephemeral=True)
-        else:
-            await interaction.user.add_roles(role)
-            await interaction.response.send_message(f"✅ **{role_name}** 역할이 부여되었습니다!", ephemeral=True)
-
     async def _mapleland(self, interaction: discord.Interaction):
-        await self._toggle_role(interaction, "메이플랜드")
+        await interaction.response.send_modal(ClassicAuthModal(server="메이플랜드"))
 
     async def _mapleplanet(self, interaction: discord.Interaction):
-        await self._toggle_role(interaction, "메이플플래닛")
+        await interaction.response.send_modal(ClassicAuthModal(server="메이플플래닛"))
 
 
 @bot.tree.command(name="게임역할패널", description="게임 역할 선택 버튼 패널 생성 (관리자 전용)")
