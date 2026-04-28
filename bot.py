@@ -325,7 +325,32 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
 
         nickname_val = self.nickname.value.strip()
         combined_nick = f"{self.server}/{level_val}/{nickname_val}"
+        days = (datetime.now(timezone.utc) - interaction.user.created_at).days
 
+        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+
+        # 30일 미만 계정 → 관리자 승인 필요
+        if days < 30:
+            if not admin_channel:
+                await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
+                return
+            request_id = str(uuid.uuid4())[:8]
+            add_auth_pending(request_id, interaction.user.id, self.server, level_val, nickname_val, "DM", is_underage=True)
+            view = AuthApproveView(request_id=request_id, is_underage=True)
+            bot.add_view(view)
+            await interaction.response.send_message(
+                "⚠️ 디스코드 가입 30일 미만 계정은 관리자 확인 후 처리됩니다.", ephemeral=True
+            )
+            await admin_channel.send(
+                f"🔐 **인증 신청** ({self.server}) ⚠️ 30일 미만 계정\n"
+                f"신청자: {interaction.user.mention}\n"
+                f"서버: **{self.server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
+                f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`",
+                view=view
+            )
+            return
+
+        # 정상 계정 → 즉시 자동 승인
         member = interaction.guild.get_member(interaction.user.id)
         if not member:
             await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
@@ -352,7 +377,6 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
         except discord.Forbidden:
             pass
 
-        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if admin_channel:
             try:
                 await admin_channel.send(
