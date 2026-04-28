@@ -298,10 +298,69 @@ class AuthServerSelectView(discord.ui.View):
         options=[discord.SelectOption(label=s, value=s) for s in AUTH_SERVER_LIST]
     )
     async def server_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        data = auth_flow_data.get(interaction.user.id, {})
-        data["server"] = select.values[0]
-        auth_flow_data[interaction.user.id] = data
-        await interaction.response.send_modal(AuthModal())
+        server = select.values[0]
+        if server in ("메이플플래닛", "메이플랜드"):
+            await interaction.response.send_modal(ClassicAuthModal(server=server))
+        else:
+            data = auth_flow_data.get(interaction.user.id, {})
+            data["server"] = server
+            auth_flow_data[interaction.user.id] = data
+            await interaction.response.send_modal(AuthModal())
+
+
+# ========== 클래식 서버 인증 모달 (레벨 + 닉네임, 즉시 승인) ==========
+class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
+    level = discord.ui.TextInput(label="레벨", placeholder="숫자만 입력", max_length=4)
+    nickname = discord.ui.TextInput(label="닉네임", placeholder="게임 내 캐릭터 닉네임", max_length=20)
+
+    def __init__(self, server: str):
+        super().__init__(title="인증 신청")
+        self.server = server
+
+    async def on_submit(self, interaction: discord.Interaction):
+        level_val = self.level.value.strip()
+        if not level_val.isdigit() or int(level_val) < 1:
+            await interaction.response.send_message("❌ 레벨이 잘못 적혀있습니다.", ephemeral=True)
+            return
+
+        nickname_val = self.nickname.value.strip()
+        combined_nick = f"{self.server}/{level_val}/{nickname_val}"
+
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        try:
+            await member.edit(nick=combined_nick)
+        except discord.Forbidden:
+            pass
+
+        await update_server_role(member, self.server)
+        await interaction.response.send_message("✅ 인증이 완료됐어요! 역할이 부여되었습니다.", ephemeral=True)
+
+        try:
+            await member.send(
+                f"**{self.server} 승인 완료**\n\n"
+                "★ 거래 전 주의 사항 참고 하세요★\n"
+                "https://www.maplediscord.com/tip\n\n"
+                "★친구초대★\n"
+                "친구에게 디스코드 채널 소개 해주세요\n"
+                "디스코드 초대링크 : https://discord.gg/2UwBw8dnSv\n"
+                "좋은 하루 보내세요!"
+            )
+        except discord.Forbidden:
+            pass
+
+        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        if admin_channel:
+            try:
+                await admin_channel.send(
+                    f"✅ **자동 인증 완료** ({self.server})\n"
+                    f"신청자: {member.mention} | 닉네임: `{combined_nick}`"
+                )
+            except discord.Forbidden:
+                pass
 
 
 # ========== 인증 모달 (레벨 + 닉네임) ==========
@@ -348,38 +407,6 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
         combined_nick = f"{server}/{level_val}/{nickname_val}"
 
         auth_flow_data.pop(interaction.user.id, None)
-
-        # 메이플플래닛/메이플랜드: 즉시 자동 승인
-        if server in ("메이플플래닛", "메이플랜드"):
-            member = interaction.guild.get_member(interaction.user.id)
-            if not member:
-                await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
-                return
-            try:
-                await member.edit(nick=combined_nick)
-            except discord.Forbidden:
-                pass
-            await update_server_role(member, server)
-            await interaction.response.send_message("✅ 인증이 완료됐어요! 역할이 부여되었습니다.", ephemeral=True)
-            try:
-                await member.send(
-                    "**[인증 완료]**\n\n"
-                    "★ 거래 전 주의 사항 참고 하세요★\n"
-                    "https://www.maplediscord.com/tip\n\n"
-                    "★친구초대★\n"
-                    "친구에게 디스코드 채널 소개 해주세요\n"
-                    "디스코드 초대링크 : https://discord.gg/2UwBw8dnSv\n"
-                    "좋은 하루 보내세요!"
-                )
-            except discord.Forbidden:
-                pass
-            admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
-            if admin_channel:
-                await admin_channel.send(
-                    f"✅ **자동 인증 완료** ({server})\n"
-                    f"신청자: {member.mention} | 닉네임: `{combined_nick}`"
-                )
-            return
 
         admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if not admin_channel:
