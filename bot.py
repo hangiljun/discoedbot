@@ -356,6 +356,7 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
             await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
             return
 
+        old_nick = member.display_name
         try:
             await member.edit(nick=combined_nick)
         except discord.Forbidden:
@@ -381,7 +382,8 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
             try:
                 await admin_channel.send(
                     f"✅ **자동 인증 완료** ({self.server})\n"
-                    f"신청자: {member.mention} | 닉네임: `{combined_nick}`"
+                    f"신청자: {member.mention}\n"
+                    f"닉네임 변경: `{old_nick}` → `{combined_nick}`"
                 )
             except discord.Forbidden:
                 pass
