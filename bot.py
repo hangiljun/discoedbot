@@ -314,7 +314,7 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
     nickname = discord.ui.TextInput(label="닉네임", placeholder="게임 내 캐릭터 닉네임", max_length=20)
 
     def __init__(self, server: str):
-        super().__init__(title="인증 신청")
+        super().__init__()
         self.server = server
 
     async def on_submit(self, interaction: discord.Interaction):
