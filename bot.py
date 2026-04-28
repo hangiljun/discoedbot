@@ -19,6 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 AUTH_ADMIN_CHANNEL_ID = int(os.getenv("AUTH_ADMIN_CHANNEL_ID", "1483398777904828416"))
 CLASSIC_ADMIN_CHANNEL_ID = int(os.getenv("CLASSIC_ADMIN_CHANNEL_ID", "1498705911857020980"))
+DM_LOG_CHANNEL_ID = int(os.getenv("DM_LOG_CHANNEL_ID", "1498706689367474256"))
 JOIN_LOG_CHANNEL_ID = int(os.getenv("JOIN_LOG_CHANNEL_ID", "0"))
 HISTORY_FILE = "/data/nickname_history.json"
 PENDING_FILE = "/data/pending_approvals.json"
@@ -793,7 +794,7 @@ async def on_message(message: discord.Message):
             daily_bot_dm_count += 1
             save_daily_stats()
             save_daily_dm_users()
-        admin_ch = bot.get_channel(ADMIN_CHANNEL_ID)
+        admin_ch = bot.get_channel(DM_LOG_CHANNEL_ID)
         if admin_ch:
             try:
                 await admin_ch.send(f"📨 {message.author.mention} 님이 봇에게 DM을 보냈습니다.")
