@@ -2028,6 +2028,107 @@ async def game_role_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
 
 
+# ========== 클래식 닉네임 변경 모달 ==========
+class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
+    level = discord.ui.TextInput(label="레벨", placeholder="숫자만 입력", max_length=4)
+    new_nickname = discord.ui.TextInput(label="닉네임", placeholder="변경할 캐릭터 닉네임", max_length=20)
+
+    def __init__(self, server: str):
+        super().__init__()
+        self.server = server
+
+    async def on_submit(self, interaction: discord.Interaction):
+        level_val = self.level.value.strip()
+        if not level_val.isdigit() or int(level_val) < 1:
+            await interaction.response.send_message("❌ 레벨이 잘못 적혀있습니다.", ephemeral=True)
+            return
+
+        nick_val = self.new_nickname.value.strip()
+        combined_nick = f"{self.server}/{level_val}/{nick_val}"
+
+        member = interaction.guild.get_member(interaction.user.id)
+        if not member:
+            await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        old_nick = member.display_name
+        try:
+            await member.edit(nick=combined_nick)
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 봇 권한 부족! 관리자에게 문의하세요.", ephemeral=True)
+            return
+
+        await update_server_role(member, self.server)
+        await interaction.response.send_message(
+            f"✅ 닉네임이 변경됐어요!\n`{old_nick}` → `{combined_nick}`", ephemeral=True
+        )
+
+        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        if admin_channel:
+            try:
+                await admin_channel.send(
+                    f"🔄 **닉네임 변경 완료** ({self.server})\n"
+                    f"유저: {member.mention}\n"
+                    f"닉네임 변경: `{old_nick}` → `{combined_nick}`"
+                )
+            except discord.Forbidden:
+                pass
+
+
+# ========== 클래식 닉네임 변경 버튼 패널 ==========
+class ClassicNickView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        planet_btn = discord.ui.Button(
+            label="메이플플래닛 닉네임변경",
+            style=discord.ButtonStyle.primary,
+            custom_id="classic_nick_mapleplanet",
+            row=0
+        )
+        planet_btn.callback = self._mapleplanet
+        self.add_item(planet_btn)
+
+        land_btn = discord.ui.Button(
+            label="메이플랜드 닉네임변경",
+            style=discord.ButtonStyle.success,
+            custom_id="classic_nick_mapleland",
+            row=0
+        )
+        land_btn.callback = self._mapleland
+        self.add_item(land_btn)
+
+    async def _mapleplanet(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ClassicNickModal(server="메이플플래닛"))
+
+    async def _mapleland(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ClassicNickModal(server="메이플랜드"))
+
+
+@bot.tree.command(name="클래식닉네임패널", description="메이플랜드/메이플플래닛 닉네임 변경 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def classic_nick_panel(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="📝 닉네임 변경 신청",
+        description=(
+            "메이플플래닛 / 메이플랜드 전용 닉네임 변경 신청 패널입니다.\n\n"
+            "**절차:**\n"
+            "1️⃣ 해당 서버 버튼 클릭\n"
+            "2️⃣ 레벨 / 변경할 닉네임 입력\n"
+            "3️⃣ 즉시 닉네임 변경 완료\n\n"
+            "⚠️ 변경 후 관리자에게 자동으로 알림이 전송됩니다."
+        ),
+        color=discord.Color.purple()
+    )
+    await interaction.channel.send(embed=embed, view=ClassicNickView())
+    await interaction.response.send_message("✅ 클래식 닉네임 변경 패널이 생성됐습니다!", ephemeral=True)
+
+
+@classic_nick_panel.error
+async def classic_nick_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
@@ -2037,6 +2138,7 @@ async def on_ready():
     bot.add_view(AuthButtonView())
     bot.add_view(ReportButtonView())
     bot.add_view(GameRoleView())
+    bot.add_view(ClassicNickView())
 
     pending = load_pending()
     for request_id in pending:
