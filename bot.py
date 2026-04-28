@@ -347,6 +347,40 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
         nickname_val = self.nickname.value.strip()
         combined_nick = f"{server}/{level_val}/{nickname_val}"
 
+        auth_flow_data.pop(interaction.user.id, None)
+
+        # 메이플플래닛/메이플랜드: 즉시 자동 승인
+        if server in ("메이플플래닛", "메이플랜드"):
+            member = interaction.guild.get_member(interaction.user.id)
+            if not member:
+                await interaction.response.send_message("❌ 유저 정보를 찾을 수 없습니다.", ephemeral=True)
+                return
+            try:
+                await member.edit(nick=combined_nick)
+            except discord.Forbidden:
+                pass
+            await update_server_role(member, server)
+            await interaction.response.send_message("✅ 인증이 완료됐어요! 역할이 부여되었습니다.", ephemeral=True)
+            try:
+                await member.send(
+                    "**[인증 완료]**\n\n"
+                    "★ 거래 전 주의 사항 참고 하세요★\n"
+                    "https://www.maplediscord.com/tip\n\n"
+                    "★친구초대★\n"
+                    "친구에게 디스코드 채널 소개 해주세요\n"
+                    "디스코드 초대링크 : https://discord.gg/2UwBw8dnSv\n"
+                    "좋은 하루 보내세요!"
+                )
+            except discord.Forbidden:
+                pass
+            admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+            if admin_channel:
+                await admin_channel.send(
+                    f"✅ **자동 인증 완료** ({server})\n"
+                    f"신청자: {member.mention} | 닉네임: `{combined_nick}`"
+                )
+            return
+
         admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if not admin_channel:
             await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
@@ -358,8 +392,6 @@ class AuthModal(discord.ui.Modal, title="인증 신청"):
 
         view = AuthApproveView(request_id=request_id, is_underage=is_underage)
         bot.add_view(view)
-
-        auth_flow_data.pop(interaction.user.id, None)
 
         await interaction.response.send_message(
             "✅ 인증 신청이 완료됐어요!\n관리자 확인 후 2시간 이내에 처리됩니다.",
