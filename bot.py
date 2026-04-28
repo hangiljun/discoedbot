@@ -32,6 +32,12 @@ DAILY_AUTH_LIST_FILE = "/data/daily_auth_list.json"
 DAILY_DM_USERS_FILE = "/data/daily_dm_users.json"
 NEXON_API_KEY = os.getenv("NEXON_API_KEY")
 NEXON_API_BASE = "https://open.api.nexon.com/maplestory/v1"
+MAPLE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9",
+    "Referer": "https://maplestory.nexon.com/",
+}
 # ==========================
 
 # 서버명 → 역할명 매핑 (챌린저스 1~4는 모두 챌린저스 역할)
@@ -1205,8 +1211,12 @@ class NickServerSelectView(discord.ui.View):
         options=[discord.SelectOption(label=s, value=s) for s in AUTH_SERVER_LIST]
     )
     async def server_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        nick_flow_data[interaction.user.id] = {"server": select.values[0]}
-        await interaction.response.send_modal(NicknameModal())
+        server = select.values[0]
+        if server in ("메이플플래닛", "메이플랜드"):
+            await interaction.response.send_modal(ClassicNickModal(server=server))
+        else:
+            nick_flow_data[interaction.user.id] = {"server": server}
+            await interaction.response.send_modal(NicknameModal())
 
 
 # ========== 2. 닉네임 변경 신청 모달 ==========
@@ -1893,12 +1903,6 @@ async def maple_news_test(interaction: discord.Interaction):
 MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
 MAPLE_EVENT_URL = "https://maplestory.nexon.com/News/Event"
 MAPLE_EVENTS_FILE = "/data/maple_events_posted.json"
-MAPLE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9",
-    "Referer": "https://maplestory.nexon.com/",
-}
 
 
 def load_posted_events() -> set:
@@ -2110,7 +2114,7 @@ class ClassicNickView(discord.ui.View):
 @app_commands.checks.has_permissions(administrator=True)
 async def classic_nick_panel(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="📝 닉네임 변경 신청",
+        title="📝 클래식 닉네임 변경 신청",
         description=(
             "메이플플래닛 / 메이플랜드 전용 닉네임 변경 신청 패널입니다.\n\n"
             "**절차:**\n"
