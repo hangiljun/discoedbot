@@ -18,6 +18,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 AUTH_ADMIN_CHANNEL_ID = int(os.getenv("AUTH_ADMIN_CHANNEL_ID", "1483398777904828416"))
+CLASSIC_ADMIN_CHANNEL_ID = int(os.getenv("CLASSIC_ADMIN_CHANNEL_ID", "1498705911857020980"))
 JOIN_LOG_CHANNEL_ID = int(os.getenv("JOIN_LOG_CHANNEL_ID", "0"))
 HISTORY_FILE = "/data/nickname_history.json"
 PENDING_FILE = "/data/pending_approvals.json"
@@ -327,7 +328,7 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
         combined_nick = f"{self.server}/{level_val}/{nickname_val}"
         days = (datetime.now(timezone.utc) - interaction.user.created_at).days
 
-        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        admin_channel = bot.get_channel(CLASSIC_ADMIN_CHANNEL_ID)
 
         # 30일 미만 계정 → 관리자 승인 필요
         if days < 30:
@@ -2063,7 +2064,7 @@ class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
             f"✅ 닉네임이 변경됐어요!\n`{old_nick}` → `{combined_nick}`", ephemeral=True
         )
 
-        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        admin_channel = bot.get_channel(CLASSIC_ADMIN_CHANNEL_ID)
         if admin_channel:
             try:
                 await admin_channel.send(
