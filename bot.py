@@ -19,6 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHANNEL_ID = int(os.getenv("ADMIN_CHANNEL_ID"))
 AUTH_ADMIN_CHANNEL_ID = int(os.getenv("AUTH_ADMIN_CHANNEL_ID", "1483398777904828416"))
 CLASSIC_ADMIN_CHANNEL_ID = int(os.getenv("CLASSIC_ADMIN_CHANNEL_ID", "1498705911857020980"))
+NEW_ACCOUNT_ALERT_CHANNEL_ID = int(os.getenv("NEW_ACCOUNT_ALERT_CHANNEL_ID", "1498713704815132714"))
 DM_LOG_CHANNEL_ID = int(os.getenv("DM_LOG_CHANNEL_ID", "1498706689367474256"))
 JOIN_LOG_CHANNEL_ID = int(os.getenv("JOIN_LOG_CHANNEL_ID", "0"))
 HISTORY_FILE = "/data/nickname_history.json"
@@ -892,7 +893,7 @@ async def on_member_join(member: discord.Member):
         except discord.Forbidden:
             pass
 
-        admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
+        admin_channel = bot.get_channel(NEW_ACCOUNT_ALERT_CHANNEL_ID)
         if admin_channel:
             try:
                 await admin_channel.send(
