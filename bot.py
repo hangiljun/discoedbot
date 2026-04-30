@@ -338,8 +338,8 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
 
         admin_channel = bot.get_channel(CLASSIC_ADMIN_CHANNEL_ID)
 
-        # 30일 미만 계정 → 관리자 승인 필요
-        if days < 30:
+        # 5일 미만 계정 → 관리자 승인 필요
+        if days < 5:
             if not admin_channel:
                 await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
                 return
@@ -348,10 +348,10 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
             view = AuthApproveView(request_id=request_id, is_underage=True)
             bot.add_view(view)
             await interaction.response.send_message(
-                "⚠️ 디스코드 가입 30일 미만 계정은 관리자 확인 후 처리됩니다.", ephemeral=True
+                "⚠️ 디스코드 가입 5일 미만 계정은 관리자 확인 후 처리됩니다.", ephemeral=True
             )
             await admin_channel.send(
-                f"🔐 **인증 신청** ({self.server}) ⚠️ 30일 미만 계정\n"
+                f"🔐 **인증 신청** ({self.server}) ⚠️ 5일 미만 계정\n"
                 f"신청자: {interaction.user.mention}\n"
                 f"서버: **{self.server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
                 f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`",
