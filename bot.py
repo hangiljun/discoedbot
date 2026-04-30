@@ -1984,16 +1984,10 @@ class GameRoleView(discord.ui.View):
         self.add_item(mapleplanet_btn)
 
     async def _mapleland(self, interaction: discord.Interaction):
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await update_server_role(member, "메이플랜드")
-        await interaction.response.send_message("✅ 메이플랜드 역할이 부여됐습니다!", ephemeral=True)
+        await interaction.response.send_modal(ClassicAuthModal(server="메이플랜드"))
 
     async def _mapleplanet(self, interaction: discord.Interaction):
-        member = interaction.guild.get_member(interaction.user.id)
-        if member:
-            await update_server_role(member, "메이플플래닛")
-        await interaction.response.send_message("✅ 메이플플래닛 역할이 부여됐습니다!", ephemeral=True)
+        await interaction.response.send_modal(ClassicAuthModal(server="메이플플래닛"))
 
 
 @bot.tree.command(name="게임역할패널", description="게임 역할 선택 버튼 패널 생성 (관리자 전용)")
