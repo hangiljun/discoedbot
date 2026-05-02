@@ -2115,6 +2115,49 @@ async def classic_nick_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
 
 
+# ========== 자리 판매/구매 패널 ==========
+class SeatTypeView(discord.ui.View):
+    def __init__(self, name: str):
+        super().__init__(timeout=60)
+        self.name = name
+
+        sell_btn = discord.ui.Button(label="📢 판매", style=discord.ButtonStyle.success)
+        buy_btn = discord.ui.Button(label="🛒 구매", style=discord.ButtonStyle.primary)
+        sell_btn.callback = self._sell
+        buy_btn.callback = self._buy
+        self.add_item(sell_btn)
+        self.add_item(buy_btn)
+
+    async def _sell(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="📢 자리 판매",
+            description=f"**{self.name}**\n\n판매자: {interaction.user.mention}",
+            color=discord.Color.green()
+        )
+        await interaction.channel.send(embed=embed)
+        await interaction.response.edit_message(content="✅ 패널이 생성됐습니다!", view=None)
+
+    async def _buy(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🛒 자리 구매",
+            description=f"**{self.name}**\n\n구매자: {interaction.user.mention}",
+            color=discord.Color.blue()
+        )
+        await interaction.channel.send(embed=embed)
+        await interaction.response.edit_message(content="✅ 패널이 생성됐습니다!", view=None)
+
+
+@bot.tree.command(name="자리", description="자리 판매/구매 패널 생성")
+@app_commands.describe(이름="판매 또는 구매할 자리 이름")
+async def seat_panel(interaction: discord.Interaction, 이름: str):
+    view = SeatTypeView(name=이름)
+    await interaction.response.send_message(
+        f"**{이름}** — 판매 또는 구매를 선택하세요:",
+        view=view,
+        ephemeral=True
+    )
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
