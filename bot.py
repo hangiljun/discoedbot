@@ -75,25 +75,23 @@ AUTH_SERVER_LIST = [
 auth_flow_data = {}  # user_id -> {"server": str, "method": str}
 nick_flow_data = {}  # user_id -> {"server": str}
 
-# 일일/주간 카운터 (재시작 시 파일에서 복원)
 _saved_stats = {}
-if os.path.exists("/data/daily_stats.json"):
+if os.path.exists(DAILY_STATS_FILE):
     try:
-        with open("/data/daily_stats.json", "r", encoding="utf-8") as _f:
+        with open(DAILY_STATS_FILE, "r", encoding="utf-8") as _f:
             _saved_stats = json.load(_f)
     except Exception:
         pass
 
 daily_join_count = _saved_stats.get("daily_join_count", 0)
 daily_leave_count = _saved_stats.get("daily_leave_count", 0)
-daily_leave_has_role = _saved_stats.get("daily_leave_has_role", 0)    # 역할 있던 유저
-daily_leave_no_role = _saved_stats.get("daily_leave_no_role", 0)      # 역할 없던 유저 (미인증)
-daily_leave_underage = _saved_stats.get("daily_leave_underage", 0)    # 30일 미만 계정
-daily_auth_approve = _saved_stats.get("daily_auth_approve", 0)        # 인증 승인 건수
-daily_auth_reject = _saved_stats.get("daily_auth_reject", 0)          # 인증 거절 건수
-daily_bot_dm_count = _saved_stats.get("daily_bot_dm_count", 0)        # 봇 DM 수신 인원수 (unique)
+daily_leave_has_role = _saved_stats.get("daily_leave_has_role", 0)
+daily_leave_no_role = _saved_stats.get("daily_leave_no_role", 0)
+daily_leave_underage = _saved_stats.get("daily_leave_underage", 0)
+daily_auth_approve = _saved_stats.get("daily_auth_approve", 0)
+daily_auth_reject = _saved_stats.get("daily_auth_reject", 0)
+daily_bot_dm_count = _saved_stats.get("daily_bot_dm_count", 0)
 
-# 주간 누적 카운터
 weekly_join_count = _saved_stats.get("weekly_join_count", 0)
 weekly_leave_count = _saved_stats.get("weekly_leave_count", 0)
 weekly_leave_has_role = _saved_stats.get("weekly_leave_has_role", 0)
@@ -103,8 +101,7 @@ weekly_auth_approve = _saved_stats.get("weekly_auth_approve", 0)
 weekly_auth_reject = _saved_stats.get("weekly_auth_reject", 0)
 weekly_bot_dm_count = _saved_stats.get("weekly_bot_dm_count", 0)
 
-# 당일 핸즈인증 승인 목록 (재시작 시 파일에서 복원)
-daily_auth_list: list[dict] = []  # [{"user_id": int, "nick": str}, ...]
+daily_auth_list: list[dict] = []
 if os.path.exists(DAILY_AUTH_LIST_FILE):
     try:
         with open(DAILY_AUTH_LIST_FILE, "r", encoding="utf-8") as _f:
@@ -112,7 +109,6 @@ if os.path.exists(DAILY_AUTH_LIST_FILE):
     except Exception:
         pass
 
-# 당일 DM 수신 유저 (중복 제거, 재시작 시 파일에서 복원)
 daily_dm_user_ids: set[int] = set()
 if os.path.exists(DAILY_DM_USERS_FILE):
     try:
@@ -227,7 +223,16 @@ def remove_pending(request_id: str):
     save_pending(pending)
 
 
-# ========== 역할 변경 ==========
+async def _disable_view(interaction: discord.Interaction, view: discord.ui.View):
+    for child in view.children:
+        child.disabled = True
+    try:
+        await interaction.response.defer()
+    except Exception:
+        pass
+    await interaction.message.edit(view=view)
+
+
 async def update_server_role(member: discord.Member, new_server: str):
     new_role_name = SERVER_ROLES.get(new_server)
     if new_role_name:
@@ -510,7 +515,6 @@ class AuthApproveView(discord.ui.View):
             self.add_item(underage_btn)
 
     def _parse_message(self, content: str):
-        import re
         user_match = re.search(r'<@(\d+)>', content)
         server_match = re.search(r'서버: \*\*(.+?)\*\*', content)
         level_match = re.search(r'레벨: \*\*(.+?)\*\*', content)
@@ -578,13 +582,7 @@ class AuthApproveView(discord.ui.View):
         except discord.Forbidden:
             pass
 
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await interaction.message.edit(view=self)
+        await _disable_view(interaction, self)
         daily_auth_list.append({"user_id": member.id, "nick": combined_nick})
         save_daily_auth_list()
         await interaction.channel.send(
@@ -624,13 +622,7 @@ class AuthApproveView(discord.ui.View):
             except discord.Forbidden:
                 pass
 
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await interaction.message.edit(view=self)
+        await _disable_view(interaction, self)
         if data:
             user_str = member.mention if member else f"`{data.get('user_id')}`"
             server = data.get('server', '?')
@@ -665,13 +657,7 @@ class AuthApproveView(discord.ui.View):
             except discord.Forbidden:
                 pass
 
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await interaction.message.edit(view=self)
+        await _disable_view(interaction, self)
         await interaction.channel.send("⚠️ 30일 미만 계정 안내 DM 발송 완료")
 
     async def no_photo(self, interaction: discord.Interaction):
@@ -1136,7 +1122,6 @@ async def daily_summary_task():
                 weekly_auth_approve = 0
                 weekly_auth_reject = 0
                 weekly_bot_dm_count = 0
-                save_daily_stats()
 
         auth_admin_channel = bot.get_channel(AUTH_ADMIN_CHANNEL_ID)
         if auth_admin_channel:
@@ -1382,13 +1367,7 @@ class ApproveView(discord.ui.View):
         except discord.Forbidden:
             pass
 
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await interaction.message.edit(view=self)
+        await _disable_view(interaction, self)
         await interaction.channel.send(
             f"✅ {member.mention} 닉네임 변경 완료!\n`{data['previous']}` → `{data['new']}`"
         )
@@ -1412,13 +1391,7 @@ class ApproveView(discord.ui.View):
             except discord.Forbidden:
                 pass
 
-        for child in self.children:
-            child.disabled = True
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await interaction.message.edit(view=self)
+        await _disable_view(interaction, self)
         await interaction.channel.send("❌ 닉네임 변경 신청 거절 완료")
 
 
