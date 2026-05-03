@@ -1780,6 +1780,8 @@ async def check_nickname_changed(nickname: str) -> str:
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status != 200:
+                    body = await resp.text()
+                    print(f"[NEXON API] character/basic 실패 status={resp.status} body={body[:200]}")
                     return "조회 실패"
                 current_name = (await resp.json()).get("character_name")
 
@@ -1798,7 +1800,8 @@ async def check_nickname_changed(nickname: str) -> str:
                         return f"⚠️ 변경 있음 (`{old_name}` → `{current_name}`)"
 
         return "✅ 변경 없음"
-    except Exception:
+    except Exception as e:
+        print(f"[NEXON API] 조회 실패 nickname={nickname} error={type(e).__name__}: {e}")
         return "조회 실패"
 
 
