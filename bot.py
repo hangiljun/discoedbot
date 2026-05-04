@@ -2112,6 +2112,21 @@ async def classic_nick_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
 
 
+@bot.tree.command(name="인증대기초기화", description="대기 중인 인증 신청을 전부 삭제합니다 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def clear_auth_pending(interaction: discord.Interaction):
+    pending = load_auth_pending()
+    count = len(pending)
+    _save_json(AUTH_PENDING_FILE, {})
+    await interaction.response.send_message(
+        f"✅ 인증 대기 {count}건을 모두 삭제했습니다.", ephemeral=True
+    )
+
+@clear_auth_pending.error
+async def clear_auth_pending_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+
 
 @bot.event
 async def on_ready():
