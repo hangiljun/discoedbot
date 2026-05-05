@@ -872,9 +872,9 @@ async def on_member_join(member: discord.Member):
             await member.send(
                 f"안녕하세요 {member.mention}님!\n\n"
                 f"⚠️ 디스코드 계정 생성일이 **{days}일** 밖에 되지 않아 "
-                f"역할 부여가 제한됩니다.\n"
+                f"메이플 본서버 역할 부여가 제한됩니다.\n"
                 f"디스코드 가입 후 **30일이 지나면** 다시 인증 신청해 주세요.\n\n"
-                f"메이플랜드는 한달 이내도 이용 가능합니다."
+                f"메이플플래닛/메이플랜드는 한달 이내도 이용 가능합니다."
             )
         except discord.Forbidden:
             pass
