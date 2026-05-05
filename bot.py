@@ -1750,6 +1750,45 @@ async def report_panel_error(interaction: discord.Interaction, error):
             pass
 
 
+@bot.tree.command(name="메이플월드신고패널", description="메이플월드 사기 신고 민원 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def maplew_report_panel(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    async for message in interaction.channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🚨 사기 신고 민원":
+                await message.delete()
+
+    embed = discord.Embed(
+        title="🚨 사기 신고 민원",
+        description=(
+            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
+            "• 연락처(폰번호) 미제공\n"
+            "• 게임 내 거래 없이 경매장 거래만 유도\n"
+            "• 외부라 핸즈로 거래 하겠다 100% 사기입니다.\n\n"
+            "아래 버튼을 눌러 신고를 접수해 주세요."
+        ),
+        color=discord.Color.red()
+    )
+    panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
+    report_panel_info[str(interaction.channel.id)] = panel_msg.id
+    save_report_panel_info(report_panel_info)
+    await interaction.followup.send("✅ 메이플월드 신고 패널 생성 완료!", ephemeral=True)
+
+
+@maplew_report_panel.error
+async def maplew_report_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            pass
+
+
 async def check_nickname_changed(nickname: str) -> str:
     if not NEXON_API_KEY:
         return "조회 불가"
