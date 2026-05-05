@@ -2000,7 +2000,7 @@ async def game_role_panel(interaction: discord.Interaction):
         title="서버 역할 선택",
         description=(
             "- 🍁 Maple Story Discord 🍁 -\n\n"
-            "✅ 지금 보는 공지사항 채널은 메이플 클래식 채널입니다.\n\n"
+            "🍁 지금 보는 공지사항 채널은 메이플 클래식 채널입니다.\n\n"
             "🍁 메이플클래식(플래닛/랜드)유저분들은 하단에 필요한 역할 클릭\n"
             "   -> 클릭을 하셔야 정상적인 채널 이용이 가능합니다.\n\n"
             "디스코드 초대링크 : <https://discord.gg/2UwBw8dnSv>"
