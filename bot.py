@@ -737,6 +737,34 @@ async def auth_panel_error(interaction: discord.Interaction, error):
 
 
 # ========== 신고 패널 재등록 (디바운스, 채널별) ==========
+REPORT_EMBEDS = {
+    "default": discord.Embed(
+        title="🚨 사기 신고 민원",
+        description=(
+            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
+            "• 연락처(폰번호) 미제공\n"
+            "• 게임 내 거래 없이 경매장 거래만 유도\n"
+            "• 핸즈로만 메소 확인 유도\n\n"
+            "아래 버튼을 눌러 신고를 접수해 주세요."
+        ),
+        color=discord.Color.red()
+    ),
+    "maplew": discord.Embed(
+        title="🚨 사기 신고 민원",
+        description=(
+            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
+            "• 연락처(폰번호) 미제공\n"
+            "• 게임 내 거래 없이 택배 거래만 유도\n"
+            "• 메소 확인 없이 선입금 요구\n\n"
+            "아래 버튼을 눌러 신고를 접수해 주세요."
+        ),
+        color=discord.Color.red()
+    ),
+}
+
+
 async def _repost_panel(channel_id: int):
     await asyncio.sleep(1)  # 1초 대기 (메시지 폭탄 시 마지막 메시지 후 1번만 실행)
     try:
@@ -745,7 +773,9 @@ async def _repost_panel(channel_id: int):
             print(f"[REPOST] 채널을 찾을 수 없음 (id={channel_id})")
             return
         key = str(channel_id)
-        old_message_id = report_panel_info.get(key)
+        panel_data = report_panel_info.get(key, {})
+        old_message_id = panel_data.get("message_id") if isinstance(panel_data, dict) else panel_data
+        panel_type = panel_data.get("type", "default") if isinstance(panel_data, dict) else "default"
         if old_message_id:
             try:
                 old_msg = await channel.fetch_message(old_message_id)
@@ -753,22 +783,11 @@ async def _repost_panel(channel_id: int):
                 print(f"[REPOST] 기존 패널 삭제 완료 (id={old_message_id})")
             except Exception as e:
                 print(f"[REPOST] 기존 패널 삭제 실패: {e}")
-        embed = discord.Embed(
-            title="🚨 사기 신고 민원",
-            description=(
-                "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
-                "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
-                "• 연락처(폰번호) 미제공\n"
-                "• 게임 내 거래 없이 경매장 거래만 유도\n"
-                "• 외부라 핸즈로 거래 하겠다 100% 사기입니다.\n\n"
-                "아래 버튼을 눌러 신고를 접수해 주세요."
-            ),
-            color=discord.Color.red()
-        )
+        embed = REPORT_EMBEDS.get(panel_type, REPORT_EMBEDS["default"])
         new_msg = await channel.send(embed=embed, view=ReportButtonView())
-        report_panel_info[key] = new_msg.id
+        report_panel_info[key] = {"message_id": new_msg.id, "type": panel_type}
         save_report_panel_info(report_panel_info)
-        print(f"[REPOST] 신고 패널 재등록 완료 (channel={channel_id}, id={new_msg.id})")
+        print(f"[REPOST] 신고 패널 재등록 완료 (channel={channel_id}, type={panel_type}, id={new_msg.id})")
     except asyncio.CancelledError:
         raise  # 취소는 다시 던져야 정상 취소 처리됨
     except Exception as e:
@@ -1465,17 +1484,25 @@ REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
 
 def load_report_panel_info() -> dict:
     data = _load_json(REPORT_PANEL_INFO_FILE)
-    # migrate old format: {"channel_id": ..., "message_id": ...} → {str(channel_id): message_id}
+    # migrate old format: {"channel_id": ..., "message_id": ...} → {str(channel_id): {"message_id": ..., "type": "default"}}
     if "channel_id" in data:
-        return {str(data["channel_id"]): data.get("message_id")} if data.get("channel_id") else {}
-    return data
+        cid = data.get("channel_id")
+        return {str(cid): {"message_id": data.get("message_id"), "type": "default"}} if cid else {}
+    # migrate flat format: {str(channel_id): message_id}
+    migrated = {}
+    for k, v in data.items():
+        if isinstance(v, dict):
+            migrated[k] = v
+        else:
+            migrated[k] = {"message_id": v, "type": "default"}
+    return migrated
 
 
 def save_report_panel_info(data: dict):
     _save_json(REPORT_PANEL_INFO_FILE, data)
 
 
-report_panel_info = load_report_panel_info()  # {str(channel_id): message_id}
+report_panel_info = load_report_panel_info()  # {str(channel_id): {"message_id": int, "type": "default"|"maplew"}}
 
 
 def load_reports() -> dict:
@@ -1721,20 +1748,8 @@ async def report_panel(interaction: discord.Interaction):
             if message.embeds[0].title == "🚨 사기 신고 민원":
                 await message.delete()
 
-    embed = discord.Embed(
-        title="🚨 사기 신고 민원",
-        description=(
-            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
-            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
-            "• 연락처(폰번호) 미제공\n"
-            "• 게임 내 거래 없이 경매장 거래만 유도\n"
-            "• 핸즈로만 메소 확인 유도\n\n"
-            "아래 버튼을 눌러 신고를 접수해 주세요."
-        ),
-        color=discord.Color.red()
-    )
-    panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
-    report_panel_info[str(interaction.channel.id)] = panel_msg.id
+    panel_msg = await interaction.channel.send(embed=REPORT_EMBEDS["default"], view=ReportButtonView())
+    report_panel_info[str(interaction.channel.id)] = {"message_id": panel_msg.id, "type": "default"}
     save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
 
@@ -1760,20 +1775,8 @@ async def maplew_report_panel(interaction: discord.Interaction):
             if message.embeds[0].title == "🚨 사기 신고 민원":
                 await message.delete()
 
-    embed = discord.Embed(
-        title="🚨 사기 신고 민원",
-        description=(
-            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
-            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
-            "• 연락처(폰번호) 미제공\n"
-            "• 게임 내 거래 없이 택배 거래만 유도\n"
-            "• 메소 확인 없이 선입금 요구\n\n"
-            "아래 버튼을 눌러 신고를 접수해 주세요."
-        ),
-        color=discord.Color.red()
-    )
-    panel_msg = await interaction.channel.send(embed=embed, view=ReportButtonView())
-    report_panel_info[str(interaction.channel.id)] = panel_msg.id
+    panel_msg = await interaction.channel.send(embed=REPORT_EMBEDS["maplew"], view=ReportButtonView())
+    report_panel_info[str(interaction.channel.id)] = {"message_id": panel_msg.id, "type": "maplew"}
     save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 메이플월드 신고 패널 생성 완료!", ephemeral=True)
 
