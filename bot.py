@@ -737,33 +737,47 @@ async def auth_panel_error(interaction: discord.Interaction, error):
 
 
 # ========== 신고 패널 재등록 (디바운스, 채널별) ==========
-REPORT_EMBEDS = {
-    "default": discord.Embed(
-        title="🚨 사기 신고 민원",
-        description=(
-            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
-            "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
-            "• 연락처(폰번호) 미제공\n"
-            "• 게임 내 거래 없이 경매장 거래만 유도\n"
-            "• 핸즈로만 메소 확인 유도\n\n"
-            "아래 버튼을 눌러 신고를 접수해 주세요."
-        ),
-        color=discord.Color.red()
+_REPORT_EMBED_DESCRIPTIONS = {
+    "default": (
+        "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+        "• 당일 가입한 디스코드 계정으로 친구 추가 후 거래\n"
+        "• 연락처(폰번호) 미제공\n"
+        "• 게임 내 거래 없이 경매장 거래만 유도\n"
+        "• 핸즈로만 메소 확인 유도\n\n"
+        "아래 버튼을 눌러 신고를 접수해 주세요."
     ),
-    "maplew": discord.Embed(
-        title="🚨 사기 신고 민원",
-        description=(
-            "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
-            "• 계좌만 받고 거래 하면 사기 당할 확률 높습니다.\n"
-            "• 연락처 없이 거래 하면 사기 100% 당합니다.\n"
-            "• 게임 내 거래 없이 택배 거래만 유도 사기 100%입니다.\n"
-            "• 수수료 본인이 부담하겠다 택배 거래 하자 100% 사기입니다.\n\n"
-            "*무조건 만나서 / 폰번호 받고 / 메소 확인 해주세요\n"
-            "수상한 사람은 아래 버튼을 눌러 신고를 접수해 주세요."
-        ),
-        color=discord.Color.red()
+    "maplew": (
+        "✅ **사기 의심 유형** - 아래 사례는 즉시 신고해 주세요.\n\n"
+        "• 계좌만 받고 거래 하면 사기 당할 확률 높습니다.\n"
+        "• 연락처 없이 거래 하면 사기 100% 당합니다.\n"
+        "• 게임 내 거래 없이 택배 거래만 유도 사기 100%입니다.\n"
+        "• 수수료 본인이 부담하겠다 택배 거래 하자 100% 사기입니다.\n\n"
+        "*무조건 만나서 / 폰번호 받고 / 메소 확인 해주세요\n"
+        "수상한 사람은 아래 버튼을 눌러 신고를 접수해 주세요."
     ),
 }
+
+
+def _make_report_embed(panel_type: str) -> discord.Embed:
+    description = _REPORT_EMBED_DESCRIPTIONS.get(panel_type, _REPORT_EMBED_DESCRIPTIONS["default"])
+    return discord.Embed(title="🚨 사기 신고 민원", description=description, color=discord.Color.red())
+
+
+async def _delete_old_report_panel(channel: discord.TextChannel):
+    async for message in channel.history(limit=50):
+        if message.author == bot.user and message.embeds:
+            if message.embeds[0].title == "🚨 사기 신고 민원":
+                await message.delete()
+
+
+async def _report_panel_error_handler(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            pass
 
 
 async def _repost_panel(channel_id: int):
@@ -775,8 +789,8 @@ async def _repost_panel(channel_id: int):
             return
         key = str(channel_id)
         panel_data = report_panel_info.get(key, {})
-        old_message_id = panel_data.get("message_id") if isinstance(panel_data, dict) else panel_data
-        panel_type = panel_data.get("type", "default") if isinstance(panel_data, dict) else "default"
+        old_message_id = panel_data.get("message_id")
+        panel_type = panel_data.get("type", "default")
         if old_message_id:
             try:
                 old_msg = await channel.fetch_message(old_message_id)
@@ -784,8 +798,7 @@ async def _repost_panel(channel_id: int):
                 print(f"[REPOST] 기존 패널 삭제 완료 (id={old_message_id})")
             except Exception as e:
                 print(f"[REPOST] 기존 패널 삭제 실패: {e}")
-        embed = REPORT_EMBEDS.get(panel_type, REPORT_EMBEDS["default"])
-        new_msg = await channel.send(embed=embed, view=ReportButtonView())
+        new_msg = await channel.send(embed=_make_report_embed(panel_type), view=ReportButtonView())
         report_panel_info[key] = {"message_id": new_msg.id, "type": panel_type}
         save_report_panel_info(report_panel_info)
         print(f"[REPOST] 신고 패널 재등록 완료 (channel={channel_id}, type={panel_type}, id={new_msg.id})")
@@ -1485,18 +1498,16 @@ REPORT_PANEL_INFO_FILE = "/data/report_panel_info.json"
 
 def load_report_panel_info() -> dict:
     data = _load_json(REPORT_PANEL_INFO_FILE)
-    # migrate old format: {"channel_id": ..., "message_id": ...} → {str(channel_id): {"message_id": ..., "type": "default"}}
     if "channel_id" in data:
         cid = data.get("channel_id")
-        return {str(cid): {"message_id": data.get("message_id"), "type": "default"}} if cid else {}
-    # migrate flat format: {str(channel_id): message_id}
-    migrated = {}
-    for k, v in data.items():
-        if isinstance(v, dict):
-            migrated[k] = v
-        else:
-            migrated[k] = {"message_id": v, "type": "default"}
-    return migrated
+        migrated = {str(cid): {"message_id": data.get("message_id"), "type": "default"}} if cid else {}
+        _save_json(REPORT_PANEL_INFO_FILE, migrated)
+        return migrated
+    if any(not isinstance(v, dict) for v in data.values()):
+        migrated = {k: v if isinstance(v, dict) else {"message_id": v, "type": "default"} for k, v in data.items()}
+        _save_json(REPORT_PANEL_INFO_FILE, migrated)
+        return migrated
+    return data
 
 
 def save_report_panel_info(data: dict):
@@ -1743,13 +1754,8 @@ class ReportButtonView(discord.ui.View):
 @app_commands.checks.has_permissions(administrator=True)
 async def report_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-
-    async for message in interaction.channel.history(limit=50):
-        if message.author == bot.user and message.embeds:
-            if message.embeds[0].title == "🚨 사기 신고 민원":
-                await message.delete()
-
-    panel_msg = await interaction.channel.send(embed=REPORT_EMBEDS["default"], view=ReportButtonView())
+    await _delete_old_report_panel(interaction.channel)
+    panel_msg = await interaction.channel.send(embed=_make_report_embed("default"), view=ReportButtonView())
     report_panel_info[str(interaction.channel.id)] = {"message_id": panel_msg.id, "type": "default"}
     save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 신고 패널 생성 완료!", ephemeral=True)
@@ -1757,26 +1763,15 @@ async def report_panel(interaction: discord.Interaction):
 
 @report_panel.error
 async def report_panel_error(interaction: discord.Interaction, error):
-    if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
-    else:
-        try:
-            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
-        except Exception:
-            pass
+    await _report_panel_error_handler(interaction, error)
 
 
 @bot.tree.command(name="메이플월드신고패널", description="메이플월드 사기 신고 민원 패널 생성 (관리자 전용)")
 @app_commands.checks.has_permissions(administrator=True)
 async def maplew_report_panel(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-
-    async for message in interaction.channel.history(limit=50):
-        if message.author == bot.user and message.embeds:
-            if message.embeds[0].title == "🚨 사기 신고 민원":
-                await message.delete()
-
-    panel_msg = await interaction.channel.send(embed=REPORT_EMBEDS["maplew"], view=ReportButtonView())
+    await _delete_old_report_panel(interaction.channel)
+    panel_msg = await interaction.channel.send(embed=_make_report_embed("maplew"), view=ReportButtonView())
     report_panel_info[str(interaction.channel.id)] = {"message_id": panel_msg.id, "type": "maplew"}
     save_report_panel_info(report_panel_info)
     await interaction.followup.send("✅ 메이플월드 신고 패널 생성 완료!", ephemeral=True)
@@ -1784,13 +1779,7 @@ async def maplew_report_panel(interaction: discord.Interaction):
 
 @maplew_report_panel.error
 async def maplew_report_panel_error(interaction: discord.Interaction, error):
-    if isinstance(error, app_commands.MissingPermissions):
-        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
-    else:
-        try:
-            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
-        except Exception:
-            pass
+    await _report_panel_error_handler(interaction, error)
 
 
 async def check_nickname_changed(nickname: str) -> str:
@@ -2175,6 +2164,11 @@ async def clear_auth_pending(interaction: discord.Interaction):
 async def clear_auth_pending_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.MissingPermissions):
         await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+    else:
+        try:
+            await interaction.response.send_message(f"❌ 오류 발생: {error}", ephemeral=True)
+        except Exception:
+            pass
 
 
 @bot.event
