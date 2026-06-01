@@ -248,7 +248,8 @@ async def update_server_role(member: discord.Member, new_server: str):
     print(f"[ROLE] 시도: {member} → {new_role_name} | role.pos={new_role.position} bot_top_pos={bot_top.position}({bot_top.name}) is_owner={is_owner}")
     try:
         fresh_member = await member.guild.fetch_member(member.id)
-        await fresh_member.add_roles(new_role)
+        new_roles = [r for r in fresh_member.roles if r.name != "@everyone"] + [new_role]
+        await fresh_member.edit(roles=new_roles)
         print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
         return True
     except discord.Forbidden as e:
