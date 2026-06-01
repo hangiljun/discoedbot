@@ -33,6 +33,7 @@ DAILY_AUTH_LIST_FILE = "/data/daily_auth_list.json"
 DAILY_DM_USERS_FILE = "/data/daily_dm_users.json"
 NEXON_API_KEY = os.getenv("NEXON_API_KEY")
 NEXON_API_BASE = "https://open.api.nexon.com/maplestory/v1"
+MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
 MAPLE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1909,7 +1910,6 @@ async def maple_news_test(interaction: discord.Interaction):
 
 
 # ========== 메이플스토리 이벤트 뉴스 자동 알림 ==========
-MAPLE_NEWS_CHANNEL_ID = 1083586012086816791
 MAPLE_EVENT_URL = "https://maplestory.nexon.com/News/Event"
 MAPLE_EVENTS_FILE = "/data/maple_events_posted.json"
 
