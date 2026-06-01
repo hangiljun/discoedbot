@@ -247,11 +247,11 @@ async def update_server_role(member: discord.Member, new_server: str):
         await member.add_roles(new_role)
         print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
         return True
-    except discord.Forbidden:
-        print(f"[ROLE] 권한 없음: {member} → {new_role_name}")
+    except discord.Forbidden as e:
+        print(f"[ROLE] 권한 없음: {member} → {new_role_name} | code={e.code} text={e.text}")
         return False
     except Exception as e:
-        print(f"[ROLE] 오류: {member} → {new_role_name}: {e}")
+        print(f"[ROLE] 오류: {member} → {new_role_name}: {type(e).__name__}: {e}")
         return False
 
 
