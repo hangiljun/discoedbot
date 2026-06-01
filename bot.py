@@ -236,15 +236,23 @@ async def _disable_view(interaction: discord.Interaction, view: discord.ui.View)
 
 async def update_server_role(member: discord.Member, new_server: str):
     new_role_name = SERVER_ROLES.get(new_server)
-    if new_role_name:
-        new_role = discord.utils.get(member.guild.roles, name=new_role_name)
-        if new_role:
-            try:
-                await member.add_roles(new_role)
-                return True
-            except discord.Forbidden:
-                return False
-    return False
+    if not new_role_name:
+        print(f"[ROLE] 서버 매핑 없음: {new_server}")
+        return False
+    new_role = discord.utils.get(member.guild.roles, name=new_role_name)
+    if not new_role:
+        print(f"[ROLE] 역할 없음: '{new_role_name}' (서버={new_server})")
+        return False
+    try:
+        await member.add_roles(new_role)
+        print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
+        return True
+    except discord.Forbidden:
+        print(f"[ROLE] 권한 없음: {member} → {new_role_name}")
+        return False
+    except Exception as e:
+        print(f"[ROLE] 오류: {member} → {new_role_name}: {e}")
+        return False
 
 
 # ========== 인증 신청 기록 관리 ==========
