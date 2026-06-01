@@ -243,6 +243,7 @@ async def update_server_role(member: discord.Member, new_server: str):
     if not new_role:
         print(f"[ROLE] 역할 없음: '{new_role_name}' (서버={new_server})")
         return False
+    print(f"[ROLE] 시도: {member} → {new_role_name} | role.id={new_role.id} managed={new_role.managed} guild={member.guild.id}")
     try:
         await member.add_roles(new_role)
         print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
