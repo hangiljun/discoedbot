@@ -244,7 +244,8 @@ async def update_server_role(member: discord.Member, new_server: str):
         print(f"[ROLE] 역할 없음: '{new_role_name}' (서버={new_server})")
         return False
     bot_top = member.guild.me.top_role
-    print(f"[ROLE] 시도: {member} → {new_role_name} | role.pos={new_role.position} bot_top_pos={bot_top.position}({bot_top.name}) managed={new_role.managed}")
+    is_owner = member.id == member.guild.owner_id
+    print(f"[ROLE] 시도: {member} → {new_role_name} | role.pos={new_role.position} bot_top_pos={bot_top.position}({bot_top.name}) is_owner={is_owner}")
     try:
         await member.add_roles(new_role)
         print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
