@@ -2183,6 +2183,172 @@ async def clear_auth_pending_error(interaction: discord.Interaction, error):
             pass
 
 
+# ========== 거래 기능 ==========
+class TradeModal(discord.ui.Modal):
+    def __init__(self, trade_type: str, channel_id: int):
+        super().__init__(title=f"메소 {trade_type}")
+        self.trade_type = trade_type
+        self.channel_id = channel_id
+
+        self.server = discord.ui.TextInput(
+            label="서버",
+            placeholder="예: 크로아, 스카니아 등",
+            required=True,
+            max_length=20
+        )
+        self.add_item(self.server)
+
+        self.amount = discord.ui.TextInput(
+            label="메소 수량",
+            placeholder="예: 15억, 20억",
+            required=True,
+            max_length=30
+        )
+        self.add_item(self.amount)
+
+        self.price = discord.ui.TextInput(
+            label="가격 (원)",
+            placeholder="예: 1500, 2000",
+            required=True,
+            max_length=20
+        )
+        self.add_item(self.price)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        channel = bot.get_channel(self.channel_id)
+        if not channel:
+            await interaction.response.send_message("❌ 거래 채널을 찾을 수 없습니다.", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title=f"💰 {self.trade_type}",
+            description=f"**{self.server.value}** | {self.amount.value} → **{self.price.value}원**",
+            color=discord.Color.green() if self.trade_type == "팝니다" else discord.Color.blue()
+        )
+
+        view = TradeView(
+            author_id=interaction.user.id,
+            trade_type=self.trade_type
+        )
+
+        await channel.send(embed=embed, view=view)
+        await interaction.response.send_message(f"✅ {self.trade_type} 게시글이 등록되었습니다!", ephemeral=True)
+
+
+class TradeView(discord.ui.View):
+    def __init__(self, author_id: int, trade_type: str):
+        super().__init__(timeout=None)
+
+        dm_btn = discord.ui.Button(
+            label="판매자와 1:1 DM하기" if trade_type == "팝니다" else "구매자와 1:1 DM하기",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"trade_dm:{author_id}"
+        )
+        dm_btn.callback = self.dm_callback
+        self.add_item(dm_btn)
+
+        complete_btn = discord.ui.Button(
+            label="거래 완료",
+            style=discord.ButtonStyle.success,
+            custom_id=f"trade_complete:{author_id}"
+        )
+        complete_btn.callback = self.complete_callback
+        self.add_item(complete_btn)
+
+    async def dm_callback(self, interaction: discord.Interaction):
+        author_id = int(interaction.data["custom_id"].split(":")[1])
+
+        if interaction.user.id == author_id:
+            await interaction.response.send_message("❌ 본인 게시글에는 DM을 보낼 수 없습니다.", ephemeral=True)
+            return
+
+        author = await bot.fetch_user(author_id)
+        requester = interaction.user
+
+        try:
+            await author.send(
+                f"💬 **거래 문의**\n"
+                f"{requester.mention} ({requester.name})님이 거래를 원합니다.\n\n"
+                f"문의 내용: {interaction.message.embeds[0].description if interaction.message.embeds else '정보 없음'}"
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 판매자/구매자의 DM이 닫혀있습니다.", ephemeral=True)
+            return
+
+        try:
+            await requester.send(
+                f"✅ {author.name}님에게 거래 문의가 전달되었습니다.\n"
+                f"상대방이 곧 연락드릴 예정입니다."
+            )
+        except discord.Forbidden:
+            pass
+
+        await interaction.response.send_message("✅ 거래 문의가 전달되었습니다!", ephemeral=True)
+
+    async def complete_callback(self, interaction: discord.Interaction):
+        author_id = int(interaction.data["custom_id"].split(":")[1])
+
+        if interaction.user.id != author_id:
+            await interaction.response.send_message("❌ 작성자만 거래 완료를 할 수 있습니다.", ephemeral=True)
+            return
+
+        await interaction.message.delete()
+        await interaction.response.send_message("✅ 거래가 완료되었습니다!", ephemeral=True)
+
+
+class TradeStartView(discord.ui.View):
+    def __init__(self, channel_id: int):
+        super().__init__(timeout=None)
+        self.channel_id = channel_id
+
+        sell_btn = discord.ui.Button(
+            label="메소 팝니다",
+            style=discord.ButtonStyle.green,
+            custom_id=f"trade_sell:{channel_id}",
+            emoji="💰"
+        )
+        sell_btn.callback = self.sell_callback
+        self.add_item(sell_btn)
+
+        buy_btn = discord.ui.Button(
+            label="메소 삽니다",
+            style=discord.ButtonStyle.blurple,
+            custom_id=f"trade_buy:{channel_id}",
+            emoji="🛒"
+        )
+        buy_btn.callback = self.buy_callback
+        self.add_item(buy_btn)
+
+    async def sell_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(TradeModal(trade_type="팝니다", channel_id=self.channel_id))
+
+    async def buy_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(TradeModal(trade_type="삽니다", channel_id=self.channel_id))
+
+
+@bot.tree.command(name="거래패널", description="메소 거래 패널 생성 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def trade_panel(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="💰 메소 거래",
+        description=(
+            "**메소 판매 / 구매 등록**\n\n"
+            "🟢 **메소 팝니다**: 메소를 판매합니다\n"
+            "🔵 **메소 삽니다**: 메소를 구매합니다\n\n"
+            "버튼 클릭 → 정보 입력 → 자동 게시"
+        ),
+        color=discord.Color.gold()
+    )
+    await interaction.channel.send(embed=embed, view=TradeStartView(channel_id=interaction.channel_id))
+    await interaction.response.send_message("✅ 거래 패널이 생성되었습니다!", ephemeral=True)
+
+
+@trade_panel.error
+async def trade_panel_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
