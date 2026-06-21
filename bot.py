@@ -2349,6 +2349,56 @@ async def trade_panel_error(interaction: discord.Interaction, error):
         await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
 
 
+@bot.tree.command(name="일일통계", description="현재까지의 일일 통계 확인 (관리자 전용)")
+@app_commands.checks.has_permissions(administrator=True)
+async def daily_stats(interaction: discord.Interaction):
+    KST = timezone(timedelta(hours=9))
+    today_str = datetime.now(KST).strftime("%Y-%m-%d")
+
+    embed = discord.Embed(
+        title=f"📊 {today_str} 일일 통계 (현재까지)",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(
+        name="👋 입/퇴장",
+        value=f"입장: {daily_join_count}명\n퇴장: {daily_leave_count}명",
+        inline=True
+    )
+
+    embed.add_field(
+        name="🤖 봇 DM",
+        value=f"{daily_bot_dm_count}명",
+        inline=True
+    )
+
+    embed.add_field(name="​", value="​", inline=True)
+
+    embed.add_field(
+        name="**퇴장 분석**",
+        value=(
+            f"인증 역할 보유: {daily_leave_has_role}명\n"
+            f"역할 없음 (미인증): {daily_leave_no_role}명\n"
+            f"30일 미만 계정: {daily_leave_underage}명"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="**인증 처리**",
+        value=f"승인: {daily_auth_approve}건\n거절: {daily_auth_reject}건",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@daily_stats.error
+async def daily_stats_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("❌ 관리자 권한이 필요합니다.", ephemeral=True)
+
+
 @bot.event
 async def on_ready():
     await bot.tree.sync()
