@@ -1179,13 +1179,24 @@ async def daily_summary_task():
                     member = guild.get_member(entry["user_id"])
                     mention = member.mention if member else f"<@{entry['user_id']}>"
                     lines.append(f"신청자: {mention}")
-                body = "\n".join(lines)
-                try:
-                    await auth_admin_channel.send(
-                        f"📋 **{date_str} 핸즈인증 승인 목록** (총 {len(snapshot)}명)\n\n{body}"
-                    )
-                except discord.Forbidden:
-                    pass
+
+                chunk_size = 50
+                total_chunks = (len(lines) + chunk_size - 1) // chunk_size
+
+                for i in range(0, len(lines), chunk_size):
+                    chunk = lines[i:i + chunk_size]
+                    chunk_num = (i // chunk_size) + 1
+                    body = "\n".join(chunk)
+
+                    if total_chunks > 1:
+                        header = f"📋 **{date_str} 핸즈인증 승인 목록** (총 {len(snapshot)}명 · {chunk_num}/{total_chunks})"
+                    else:
+                        header = f"📋 **{date_str} 핸즈인증 승인 목록** (총 {len(snapshot)}명)"
+
+                    try:
+                        await auth_admin_channel.send(f"{header}\n\n{body}")
+                    except discord.Forbidden:
+                        pass
             else:
                 try:
                     await auth_admin_channel.send(
