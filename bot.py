@@ -2020,13 +2020,13 @@ GAME_ROLE_CHANNEL_ID = 1213334715663130645
 class GameRoleView(discord.ui.View):
     def __init__(self, guild_id: int = None):
         super().__init__(timeout=None)
-        if guild_id:
-            self.add_item(discord.ui.Button(
-                label="메이플본서버",
-                style=discord.ButtonStyle.link,
-                url=f"https://discord.com/channels/{guild_id}/1081075118761066556",
-                row=0
-            ))
+        # 메이플 본서버 버튼 (서버 ID 하드코딩)
+        self.add_item(discord.ui.Button(
+            label="메이플본서버",
+            style=discord.ButtonStyle.link,
+            url="https://discord.com/channels/1079813015022612520/1081075118761066556",
+            row=0
+        ))
         mapleland_btn = discord.ui.Button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland", row=0)
         mapleland_btn.callback = self._mapleland
         self.add_item(mapleland_btn)
@@ -2062,7 +2062,7 @@ async def game_role_panel(interaction: discord.Interaction):
         ),
         color=discord.Color.green()
     )
-    await channel.send(embed=embed, view=GameRoleView(guild_id=interaction.guild.id))
+    await channel.send(embed=embed, view=GameRoleView())
     await interaction.followup.send("✅ 게임 역할 패널이 생성되었습니다!", ephemeral=True)
 
 
