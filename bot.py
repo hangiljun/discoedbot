@@ -810,6 +810,11 @@ async def _repost_panel(channel_id: int):
                 old_msg = await channel.fetch_message(old_message_id)
                 await old_msg.delete()
                 print(f"[REPOST] 기존 패널 삭제 완료 (id={old_message_id})")
+            except discord.HTTPException as e:
+                if e.status == 429:  # Rate limit
+                    print(f"[REPOST] 레이트 리미트 감지, 재등록 취소 (channel={channel_id})")
+                    return
+                print(f"[REPOST] 기존 패널 삭제 실패: {e}")
             except Exception as e:
                 print(f"[REPOST] 기존 패널 삭제 실패: {e}")
         new_msg = await channel.send(embed=_make_report_embed(panel_type), view=ReportButtonView())
@@ -818,6 +823,11 @@ async def _repost_panel(channel_id: int):
         print(f"[REPOST] 신고 패널 재등록 완료 (channel={channel_id}, type={panel_type}, id={new_msg.id})")
     except asyncio.CancelledError:
         raise  # 취소는 다시 던져야 정상 취소 처리됨
+    except discord.HTTPException as e:
+        if e.status == 429:  # Rate limit
+            print(f"[REPOST] 레이트 리미트 감지, 재등록 취소 (channel={channel_id})")
+        else:
+            print(f"[REPOST] 패널 재등록 실패 (channel={channel_id}): {e}")
     except Exception as e:
         print(f"[REPOST] 패널 재등록 실패 (channel={channel_id}): {e}")
 
@@ -860,7 +870,8 @@ async def on_message(message: discord.Message):
         )
 
     # 신고 패널 채널(여러 개 가능)에 메시지 오면 패널 맨 아래로 재등록 (디바운스: 마지막 메시지 후 1초)
-    if str(message.channel.id) in report_panel_info:
+    # 봇 자신의 메시지는 재등록을 트리거하지 않음 (무한 루프 방지)
+    if not message.author.bot and str(message.channel.id) in report_panel_info:
         cid = message.channel.id
         print(f"[REPOST] 메시지 감지 → 재등록 예약 (channel={cid})")
         existing = _report_repost_tasks.get(cid)
