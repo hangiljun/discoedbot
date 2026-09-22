@@ -10,8 +10,8 @@ import asyncio
 import aiohttp
 import re
 import io
-import time
 from bs4 import BeautifulSoup
+from bot_runtime import ApprovalGuard, log_http_error, make_http_trace, start_with_retry
 
 load_dotenv()
 
@@ -123,8 +123,10 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, http_trace=make_http_trace())
 bot._tasks_started = False
+bot._commands_synced = False
+nickname_approval_guard = ApprovalGuard()
 
 
 # ========== 신청 기록 관리 ==========
@@ -228,10 +230,8 @@ def remove_pending(request_id: str):
 async def _disable_view(interaction: discord.Interaction, view: discord.ui.View):
     for child in view.children:
         child.disabled = True
-    try:
+    if not interaction.response.is_done():
         await interaction.response.defer()
-    except Exception:
-        pass
     await interaction.message.edit(view=view)
 
 
@@ -256,6 +256,8 @@ async def update_server_role(member: discord.Member, new_server: str):
     except discord.Forbidden as e:
         print(f"[ROLE] 권한 없음: {member} → {new_role_name} | code={e.code} text={e.text}")
         return False
+    except discord.HTTPException:
+        raise  # Do not mark an approval complete after a rate-limited role change.
     except Exception as e:
         print(f"[ROLE] 오류: {member} → {new_role_name}: {type(e).__name__}: {e}")
         return False
@@ -1407,6 +1409,7 @@ class ApproveView(discord.ui.View):
         self.add_item(approve_btn)
         self.add_item(reject_btn)
 
+    @nickname_approval_guard.protect
     async def approve(self, interaction: discord.Interaction):
         pending = load_pending()
         data = pending.get(self.request_id)
@@ -1426,7 +1429,12 @@ class ApproveView(discord.ui.View):
             return
 
         if data.get("new_server"):
-            await update_server_role(member, data["new_server"])
+            if not await update_server_role(member, data["new_server"]):
+                await interaction.followup.send(
+                    "⚠️ 닉네임은 변경됐지만 역할 변경에 실패했습니다. 역할 설정과 봇 권한을 확인한 후 다시 승인해주세요.",
+                    ephemeral=True,
+                )
+                return
 
         record_change(str(data["user_id"]), data["previous"], data["new"])
         remove_pending(self.request_id)
@@ -1441,12 +1449,13 @@ class ApproveView(discord.ui.View):
             f"✅ {member.mention} 닉네임 변경 완료!\n`{data['previous']}` → `{data['new']}`"
         )
 
+    @nickname_approval_guard.protect
     async def reject(self, interaction: discord.Interaction):
         pending = load_pending()
         data = pending.get(self.request_id)
         if not data:
             try:
-                await interaction.response.send_message("❌ 이미 처리된 신청입니다.", ephemeral=True)
+                await interaction.followup.send("❌ 이미 처리된 신청입니다.", ephemeral=True)
             except Exception:
                 await interaction.channel.send("❌ 이미 처리된 신청입니다.")
             return
@@ -2424,9 +2433,15 @@ async def daily_stats_error(interaction: discord.Interaction, error):
 
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
-    for guild in bot.guilds:
-        await bot.tree.sync(guild=guild)
+    if not bot._commands_synced:
+        try:
+            await bot.tree.sync()
+            for guild in bot.guilds:
+                await bot.tree.sync(guild=guild)
+            bot._commands_synced = True
+        except discord.HTTPException as error:
+            log_http_error("command_sync", error)
+            # Existing commands and persistent buttons can still be restored.
     bot.add_view(NicknameButtonView())
     bot.add_view(AuthButtonView())
     bot.add_view(ReportButtonView())
@@ -2460,21 +2475,11 @@ async def on_ready():
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
-# 레이트 리미트 재시도 로직
-while True:
+# Keep one event loop; recover the HTTP transport without closing the Bot.
+if __name__ == "__main__":
+    discord.utils.setup_logging()
+    print(f"[STARTUP] commit={os.getenv('RAILWAY_GIT_COMMIT_SHA', 'local')} discord.py={discord.__version__}", flush=True)
     try:
-        bot.run(BOT_TOKEN)
-        break  # 정상 종료 시 루프 탈출
-    except discord.HTTPException as e:
-        if e.status == 429:
-            wait_time = 300  # 5분
-            print(f"[RATE LIMIT] Discord API 레이트 리미트 감지. {wait_time}초 후 재시도...")
-            time.sleep(wait_time)
-        else:
-            raise  # 다른 HTTP 에러는 그대로 발생시킴
+        asyncio.run(start_with_retry(bot, BOT_TOKEN))
     except KeyboardInterrupt:
         print("[SHUTDOWN] 봇 종료")
-        break
-    except Exception as e:
-        print(f"[ERROR] 예상치 못한 에러: {e}")
-        raise
