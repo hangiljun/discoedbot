@@ -10,6 +10,7 @@ import asyncio
 import aiohttp
 import re
 import io
+import time
 from bs4 import BeautifulSoup
 
 load_dotenv()
@@ -2459,4 +2460,21 @@ async def on_ready():
     print(f"✅ {bot.user} 온라인! | 대기 중인 승인: {len(pending)}건 | 인증 대기: {len(auth_pending)}건 | 신고 복구: {len(reports)}건")
 
 
-bot.run(BOT_TOKEN)
+# 레이트 리미트 재시도 로직
+while True:
+    try:
+        bot.run(BOT_TOKEN)
+        break  # 정상 종료 시 루프 탈출
+    except discord.HTTPException as e:
+        if e.status == 429:
+            wait_time = 300  # 5분
+            print(f"[RATE LIMIT] Discord API 레이트 리미트 감지. {wait_time}초 후 재시도...")
+            time.sleep(wait_time)
+        else:
+            raise  # 다른 HTTP 에러는 그대로 발생시킴
+    except KeyboardInterrupt:
+        print("[SHUTDOWN] 봇 종료")
+        break
+    except Exception as e:
+        print(f"[ERROR] 예상치 못한 에러: {e}")
+        raise
