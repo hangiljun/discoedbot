@@ -249,14 +249,18 @@ async def update_server_role(member: discord.Member, new_server: str):
     print(f"[ROLE] 시도: {member} → {new_role_name} | role.pos={new_role.position} bot_top_pos={bot_top.position}({bot_top.name}) is_owner={is_owner}")
     try:
         fresh_member = await member.guild.fetch_member(member.id)
-        new_roles = [r for r in fresh_member.roles if r.name != "@everyone"] + [new_role]
-        await fresh_member.edit(roles=new_roles)
+        if any(role.id == new_role.id for role in fresh_member.roles):
+            print(f"[ROLE] 이미 역할 보유: {member} → {new_role_name}")
+            return True
+        # Add only the requested role; never replace the member's entire list.
+        await fresh_member.add_roles(new_role, atomic=True)
         print(f"[ROLE] 역할 부여 완료: {member} → {new_role_name}")
         return True
     except discord.Forbidden as e:
         print(f"[ROLE] 권한 없음: {member} → {new_role_name} | code={e.code} text={e.text}")
         return False
-    except discord.HTTPException:
+    except discord.HTTPException as error:
+        log_http_error("server_role_add", error)
         raise  # Do not mark an approval complete after a rate-limited role change.
     except Exception as e:
         print(f"[ROLE] 오류: {member} → {new_role_name}: {type(e).__name__}: {e}")

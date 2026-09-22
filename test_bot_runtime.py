@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 from yarl import URL
 
-from bot_runtime import ApprovalGuard, make_http_trace, retry_delay, start_with_retry
+from bot_runtime import ApprovalGuard, log_http_error, make_http_trace, retry_delay, start_with_retry
 
 
 def http_error(status=429, headers=None):
@@ -172,6 +172,46 @@ class ApprovalIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.env["on_message"](SimpleNamespace(author=SimpleNamespace(bot=True)))
         self.assertFalse(self.env["_report_repost_tasks"])
         self.env["bot"].process_commands.assert_not_awaited()
+
+
+class RoleTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        source = ast.parse(pathlib.Path(__file__).with_name("bot.py").read_text(encoding="utf-8"))
+        node = next(n for n in source.body if isinstance(n, ast.AsyncFunctionDef)
+                    and n.name == "update_server_role")
+        self.role = SimpleNamespace(id=42, name="target", position=1)
+        self.fresh = SimpleNamespace(roles=[], add_roles=AsyncMock(), edit=AsyncMock())
+        guild = SimpleNamespace(roles=[self.role], owner_id=999,
+                                me=SimpleNamespace(top_role=SimpleNamespace(position=10, name="bot")),
+                                fetch_member=AsyncMock(return_value=self.fresh))
+        self.member = SimpleNamespace(id=123, guild=guild)
+        env = {"discord": discord, "SERVER_ROLES": {"server": "target"},
+               "log_http_error": log_http_error}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "bot.py", "exec"), env)
+        self.update = env["update_server_role"]
+
+    async def test_existing_role_is_not_added_twice(self):
+        self.fresh.roles = [self.role]
+        self.assertTrue(await self.update(self.member, "server"))
+        self.fresh.add_roles.assert_not_awaited()
+        self.fresh.edit.assert_not_awaited()
+
+    async def test_only_requested_role_is_added(self):
+        self.fresh.roles = [SimpleNamespace(id=99, name="unrelated")]
+        self.assertTrue(await self.update(self.member, "server"))
+        self.fresh.add_roles.assert_awaited_once_with(self.role, atomic=True)
+        self.fresh.edit.assert_not_awaited()
+
+    async def test_invalid_role_response_keeps_details(self):
+        error = discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request", headers={}),
+                                      {"code": 50035, "message": "Invalid Form Body",
+                                       "errors": {"roles": {"_errors": [{"message": "Invalid role"}]}}})
+        self.fresh.add_roles.side_effect = error
+        with self.assertLogs("bot.runtime", "WARNING") as logs:
+            with self.assertRaises(discord.HTTPException):
+                await self.update(self.member, "server")
+        self.assertIn("Invalid role", str(logs.output))
+        self.assertIn("server_role_add", str(logs.output))
 
 
 if __name__ == "__main__":

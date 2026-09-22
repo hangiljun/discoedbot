@@ -34,10 +34,11 @@ def log_http_error(operation, error):
     headers = getattr(getattr(error, "response", None), "headers", {})
     log.warning(
         "[HTTP_FAILURE] operation=%s status=%s code=%s scope=%s "
-        "global=%s retry_after=%s cf_ray=%s",
+        "global=%s retry_after=%s cf_ray=%s detail=%s",
         operation, error.status, error.code, headers.get("X-RateLimit-Scope"),
         headers.get("X-RateLimit-Global"), headers.get("Retry-After"),
         headers.get("CF-Ray"),
+        str(error.text).replace("\n", " | ")[:600],
     )
 
 
