@@ -346,21 +346,33 @@ class AuthServerSelectView(discord.ui.View):
 
 # ========== 클래식 서버 인증 모달 (레벨 + 닉네임, 즉시 승인) ==========
 class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
-    level = discord.ui.TextInput(label="레벨", placeholder="숫자만 입력", max_length=4)
-    nickname = discord.ui.TextInput(label="닉네임", placeholder="게임 내 캐릭터 닉네임", max_length=20)
-
-    def __init__(self, server: str):
+    def __init__(self, server: str | None = None):
         super().__init__()
         self.server = server
+        if server is None:
+            self.server_select = discord.ui.Select(
+                placeholder="게임 서버를 선택하세요",
+                options=[
+                    discord.SelectOption(label=name)
+                    for name in ("메이플랜드", "메이플플래닛", "메이플어스")
+                ],
+            )
+            self.add_item(discord.ui.Label(text="서버 선택", component=self.server_select))
+
+        self.level = discord.ui.TextInput(placeholder="숫자만 입력", max_length=4)
+        self.nickname = discord.ui.TextInput(placeholder="게임 내 캐릭터 닉네임", max_length=20)
+        self.add_item(discord.ui.Label(text="레벨", component=self.level))
+        self.add_item(discord.ui.Label(text="닉네임", component=self.nickname))
 
     async def on_submit(self, interaction: discord.Interaction):
+        server = self.server if self.server is not None else self.server_select.values[0]
         level_val = self.level.value.strip()
         if not level_val.isdigit() or int(level_val) < 1:
             await interaction.response.send_message("❌ 레벨이 잘못 적혀있습니다.", ephemeral=True)
             return
 
         nickname_val = self.nickname.value.strip()
-        combined_nick = f"{self.server}/{level_val}/{nickname_val}"
+        combined_nick = f"{server}/{level_val}/{nickname_val}"
         days = (datetime.now(timezone.utc) - interaction.user.created_at).days
 
         admin_channel = bot.get_channel(CLASSIC_ADMIN_CHANNEL_ID)
@@ -371,16 +383,16 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
                 await interaction.response.send_message("❌ 관리자 채널을 찾을 수 없습니다.", ephemeral=True)
                 return
             request_id = str(uuid.uuid4())[:8]
-            add_auth_pending(request_id, interaction.user.id, self.server, level_val, nickname_val, "DM", is_underage=True)
+            add_auth_pending(request_id, interaction.user.id, server, level_val, nickname_val, "DM", is_underage=True)
             view = AuthApproveView(request_id=request_id, is_underage=True)
             bot.add_view(view)
             await interaction.response.send_message(
                 "⚠️ 디스코드 가입 30일 미만 계정은 관리자 확인 후 처리됩니다.", ephemeral=True
             )
             await admin_channel.send(
-                f"🔐 **인증 신청** ({self.server}) ⚠️ 30일 미만 계정\n"
+                f"🔐 **인증 신청** ({server}) ⚠️ 30일 미만 계정\n"
                 f"신청자: {interaction.user.mention}\n"
-                f"서버: **{self.server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
+                f"서버: **{server}** | 레벨: **{level_val}** | 닉네임: **{nickname_val}**\n"
                 f"닉네임 변경: `{interaction.user.display_name}` → `{combined_nick}`",
                 view=view
             )
@@ -398,12 +410,12 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
         except discord.Forbidden:
             pass
 
-        await update_server_role(member, self.server)
+        await update_server_role(member, server)
         await interaction.response.send_message("✅ 인증이 완료됐어요! 역할이 부여되었습니다.", ephemeral=True)
 
         try:
             await member.send(
-                f"**{self.server} 승인 완료**\n\n"
+                f"**{server} 승인 완료**\n\n"
                 "★ 거래 전 주의 사항 참고 하세요★\n"
                 "https://www.maplediscord.com/tip\n\n"
                 "★친구초대★\n"
@@ -417,7 +429,7 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
         if admin_channel:
             try:
                 await admin_channel.send(
-                    f"✅ **자동 인증 완료** ({self.server})\n"
+                    f"✅ **자동 인증 완료** ({server})\n"
                     f"신청자: {member.mention}\n"
                     f"닉네임 변경: `{old_nick}` → `{combined_nick}`"
                 )
@@ -2044,35 +2056,33 @@ GAME_ROLE_CHANNEL_ID = 1213334715663130645
 
 
 class GameRoleView(discord.ui.View):
-    def __init__(self, guild_id: int = None):
+    def __init__(self, *, legacy: bool = False):
         super().__init__(timeout=None)
-        # 메이플 본서버 버튼 (서버 ID 하드코딩)
         self.add_item(discord.ui.Button(
             label="메이플본서버",
             style=discord.ButtonStyle.link,
             url="https://discord.com/channels/1079813015022612520/1081075118761066556",
-            row=0
         ))
-        mapleland_btn = discord.ui.Button(label="메이플랜드", style=discord.ButtonStyle.primary, custom_id="game_role_mapleland", row=0)
-        mapleland_btn.callback = self._mapleland
-        self.add_item(mapleland_btn)
 
-        mapleplanet_btn = discord.ui.Button(label="메이플플래닛", style=discord.ButtonStyle.primary, custom_id="game_role_mapleplanet", row=0)
-        mapleplanet_btn.callback = self._mapleplanet
-        self.add_item(mapleplanet_btn)
+        # Keep existing announcements functional after deployment.
+        if legacy:
+            buttons = (
+                ("메이플랜드", "game_role_mapleland"),
+                ("메이플플래닛", "game_role_mapleplanet"),
+                ("메이플어스", "game_role_mapleearth"),
+            )
+        else:
+            buttons = (("메이플 클래식", "game_role_classic"),)
 
-        mapleearth_btn = discord.ui.Button(label="메이플어스", style=discord.ButtonStyle.primary, custom_id="game_role_mapleearth", row=0)
-        mapleearth_btn.callback = self._mapleearth
-        self.add_item(mapleearth_btn)
+        for label, custom_id in buttons:
+            button = discord.ui.Button(
+                label=label, style=discord.ButtonStyle.primary, custom_id=custom_id,
+            )
+            button.callback = self._classic
+            self.add_item(button)
 
-    async def _mapleland(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ClassicAuthModal(server="메이플랜드"))
-
-    async def _mapleplanet(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ClassicAuthModal(server="메이플플래닛"))
-
-    async def _mapleearth(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ClassicAuthModal(server="메이플어스"))
+    async def _classic(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ClassicAuthModal())
 
 
 @bot.tree.command(name="게임역할패널", description="게임 역할 선택 버튼 패널 생성 (관리자 전용)")
@@ -2089,8 +2099,8 @@ async def game_role_panel(interaction: discord.Interaction):
         description=(
             "- 🍁 Maple Story Discord 🍁 -\n\n"
             "🍁 지금 보는 공지사항 채널은 메이플 클래식 채널입니다.\n\n"
-            "🍁 메이플클래식(플래닛/랜드/어스)유저분들은 하단에 필요한 역할 클릭\n"
-            "   -> 클릭을 하셔야 정상적인 채널 이용이 가능합니다.\n\n"
+            "🍁 메이플 클래식 이용자는 아래 **메이플 클래식** 버튼을 눌러 주세요.\n"
+            "   인증 신청 창에서 서버를 선택하고 레벨과 닉네임을 입력해 주세요.\n\n"
             "디스코드 초대링크 : <https://discord.gg/2UwBw8dnSv>"
         ),
         color=discord.Color.green()
@@ -2458,6 +2468,7 @@ async def on_ready():
     bot.add_view(AuthButtonView())
     bot.add_view(ReportButtonView())
     bot.add_view(GameRoleView())
+    bot.add_view(GameRoleView(legacy=True))
     bot.add_view(ClassicNickView())
 
     pending = load_pending()
