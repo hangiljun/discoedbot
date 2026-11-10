@@ -65,6 +65,7 @@ SERVER_ROLES = {
     "제니스": "제니스",
     "메이플랜드": "메이플랜드",
     "메이플플래닛": "메이플플래닛",
+    "메이플어스": "메이플어스",
 }
 
 AUTH_SERVER_LIST = [
@@ -579,8 +580,8 @@ class AuthApproveView(discord.ui.View):
 
         await update_server_role(member, data["server"])
 
-        # 메이플랜드/메이플플래닛은 인증유저 역할 미부여
-        if data["server"] not in ("메이플랜드", "메이플플래닛"):
+        # 클래식 서버는 인증유저 역할 미부여
+        if data["server"] not in ("메이플랜드", "메이플플래닛", "메이플어스"):
             auth_role = discord.utils.get(interaction.guild.roles, name=HANDS_AUTH_ROLE)
             if auth_role:
                 try:
@@ -2060,11 +2061,18 @@ class GameRoleView(discord.ui.View):
         mapleplanet_btn.callback = self._mapleplanet
         self.add_item(mapleplanet_btn)
 
+        mapleearth_btn = discord.ui.Button(label="메이플어스", style=discord.ButtonStyle.primary, custom_id="game_role_mapleearth", row=0)
+        mapleearth_btn.callback = self._mapleearth
+        self.add_item(mapleearth_btn)
+
     async def _mapleland(self, interaction: discord.Interaction):
         await interaction.response.send_modal(ClassicAuthModal(server="메이플랜드"))
 
     async def _mapleplanet(self, interaction: discord.Interaction):
         await interaction.response.send_modal(ClassicAuthModal(server="메이플플래닛"))
+
+    async def _mapleearth(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ClassicAuthModal(server="메이플어스"))
 
 
 @bot.tree.command(name="게임역할패널", description="게임 역할 선택 버튼 패널 생성 (관리자 전용)")
@@ -2081,7 +2089,7 @@ async def game_role_panel(interaction: discord.Interaction):
         description=(
             "- 🍁 Maple Story Discord 🍁 -\n\n"
             "🍁 지금 보는 공지사항 채널은 메이플 클래식 채널입니다.\n\n"
-            "🍁 메이플클래식(플래닛/랜드)유저분들은 하단에 필요한 역할 클릭\n"
+            "🍁 메이플클래식(플래닛/랜드/어스)유저분들은 하단에 필요한 역할 클릭\n"
             "   -> 클릭을 하셔야 정상적인 채널 이용이 가능합니다.\n\n"
             "디스코드 초대링크 : <https://discord.gg/2UwBw8dnSv>"
         ),
