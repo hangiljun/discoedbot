@@ -68,6 +68,8 @@ SERVER_ROLES = {
     "메이플어스": "메이플어스",
 }
 
+CLASSIC_SERVERS = ("메이플랜드", "메이플플래닛", "메이플어스")
+
 AUTH_SERVER_LIST = [
     "챌린저스1", "챌린저스2", "챌린저스3", "챌린저스4",
     "스카니아", "루나", "엘리시움", "크로아", "베라", "오로라",
@@ -354,7 +356,7 @@ class ClassicAuthModal(discord.ui.Modal, title="인증 신청"):
                 placeholder="게임 서버를 선택하세요",
                 options=[
                     discord.SelectOption(label=name)
-                    for name in ("메이플랜드", "메이플플래닛", "메이플어스")
+                    for name in CLASSIC_SERVERS
                 ],
             )
             self.add_item(discord.ui.Label(text="서버 선택", component=self.server_select))
@@ -2117,21 +2119,33 @@ async def game_role_panel_error(interaction: discord.Interaction, error):
 
 # ========== 클래식 닉네임 변경 모달 ==========
 class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
-    level = discord.ui.TextInput(label="레벨", placeholder="숫자만 입력", max_length=4)
-    new_nickname = discord.ui.TextInput(label="닉네임", placeholder="변경할 캐릭터 닉네임", max_length=20)
-
-    def __init__(self, server: str):
+    def __init__(self, server: str | None = None):
         super().__init__()
         self.server = server
+        if server is None:
+            self.server_select = discord.ui.Select(
+                placeholder="게임 서버를 선택하세요",
+                options=[
+                    discord.SelectOption(label=name)
+                    for name in CLASSIC_SERVERS
+                ],
+            )
+            self.add_item(discord.ui.Label(text="서버 선택", component=self.server_select))
+
+        self.level = discord.ui.TextInput(placeholder="숫자만 입력", max_length=4)
+        self.new_nickname = discord.ui.TextInput(placeholder="변경할 캐릭터 닉네임", max_length=20)
+        self.add_item(discord.ui.Label(text="레벨", component=self.level))
+        self.add_item(discord.ui.Label(text="닉네임", component=self.new_nickname))
 
     async def on_submit(self, interaction: discord.Interaction):
+        server = self.server if self.server is not None else self.server_select.values[0]
         level_val = self.level.value.strip()
         if not level_val.isdigit() or int(level_val) < 1:
             await interaction.response.send_message("❌ 레벨이 잘못 적혀있습니다.", ephemeral=True)
             return
 
         nick_val = self.new_nickname.value.strip()
-        combined_nick = f"{self.server}/{level_val}/{nick_val}"
+        combined_nick = f"{server}/{level_val}/{nick_val}"
 
         member = interaction.guild.get_member(interaction.user.id)
         if not member:
@@ -2145,7 +2159,7 @@ class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
             await interaction.response.send_message("❌ 봇 권한 부족! 관리자에게 문의하세요.", ephemeral=True)
             return
 
-        await update_server_role(member, self.server)
+        await update_server_role(member, server)
         await interaction.response.send_message(
             f"✅ 닉네임이 변경됐어요!\n`{old_nick}` → `{combined_nick}`", ephemeral=True
         )
@@ -2154,7 +2168,7 @@ class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
         if admin_channel:
             try:
                 await admin_channel.send(
-                    f"🔄 **닉네임 변경 완료** ({self.server})\n"
+                    f"🔄 **닉네임 변경 완료** ({server})\n"
                     f"유저: {member.mention}\n"
                     f"닉네임 변경: `{old_nick}` → `{combined_nick}`"
                 )
@@ -2164,43 +2178,37 @@ class ClassicNickModal(discord.ui.Modal, title="닉네임 변경 신청"):
 
 # ========== 클래식 닉네임 변경 버튼 패널 ==========
 class ClassicNickView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, *, legacy: bool = False):
         super().__init__(timeout=None)
-        planet_btn = discord.ui.Button(
-            label="메이플플래닛 닉네임변경",
-            style=discord.ButtonStyle.primary,
-            custom_id="classic_nick_mapleplanet",
-            row=0
-        )
-        planet_btn.callback = self._mapleplanet
-        self.add_item(planet_btn)
+        if legacy:
+            buttons = (
+                ("메이플플래닛 닉네임변경", "classic_nick_mapleplanet"),
+                ("메이플랜드 닉네임변경", "classic_nick_mapleland"),
+            )
+        else:
+            buttons = (("메이플 클래식 닉네임 변경", "classic_nick_change"),)
 
-        land_btn = discord.ui.Button(
-            label="메이플랜드 닉네임변경",
-            style=discord.ButtonStyle.success,
-            custom_id="classic_nick_mapleland",
-            row=0
-        )
-        land_btn.callback = self._mapleland
-        self.add_item(land_btn)
+        for label, custom_id in buttons:
+            button = discord.ui.Button(
+                label=label, style=discord.ButtonStyle.primary, custom_id=custom_id,
+            )
+            button.callback = self._classic
+            self.add_item(button)
 
-    async def _mapleplanet(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ClassicNickModal(server="메이플플래닛"))
-
-    async def _mapleland(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ClassicNickModal(server="메이플랜드"))
+    async def _classic(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ClassicNickModal())
 
 
-@bot.tree.command(name="클래식닉네임패널", description="메이플랜드/메이플플래닛 닉네임 변경 패널 생성 (관리자 전용)")
+@bot.tree.command(name="클래식닉네임패널", description="메이플 클래식 닉네임 변경 패널 생성 (관리자 전용)")
 @app_commands.checks.has_permissions(administrator=True)
 async def classic_nick_panel(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📝 클래식 닉네임 변경 신청",
         description=(
-            "메이플플래닛 / 메이플랜드 전용 닉네임 변경 신청 패널입니다.\n\n"
+            "메이플랜드 / 메이플플래닛 / 메이플어스 전용 닉네임 변경 신청 패널입니다.\n\n"
             "**절차:**\n"
-            "1️⃣ 해당 서버 버튼 클릭\n"
-            "2️⃣ 레벨 / 변경할 닉네임 입력\n"
+            "1️⃣ 메이플 클래식 닉네임 변경 버튼 클릭\n"
+            "2️⃣ 서버 선택 후 레벨 / 변경할 닉네임 입력\n"
             "3️⃣ 즉시 닉네임 변경 완료\n\n"
             "⚠️ 변경 후 관리자에게 자동으로 알림이 전송됩니다."
         ),
@@ -2470,6 +2478,7 @@ async def on_ready():
     bot.add_view(GameRoleView())
     bot.add_view(GameRoleView(legacy=True))
     bot.add_view(ClassicNickView())
+    bot.add_view(ClassicNickView(legacy=True))
 
     pending = load_pending()
     for request_id in pending:
